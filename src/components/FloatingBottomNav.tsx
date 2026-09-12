@@ -6,7 +6,8 @@ import {
   Calendar, 
   Target, 
   Star, 
-  Timer 
+  Timer,
+  Sliders
 } from 'lucide-react';
 import { NavTabKey } from '../types';
 
@@ -25,6 +26,7 @@ const NAV_OPTIONS: NavOption[] = [
   { id: 'progress', label: 'প্রোগ্রেস', shortLabel: 'প্রোগ্রেস', icon: Target, accent: 'from-emerald-500 to-teal-600' },
   { id: 'suggestions', label: 'সাজেশন', shortLabel: 'সাজেশন', icon: Star, accent: 'from-amber-400 to-amber-600' },
   { id: 'countdown', label: 'কাউন্টডাউন', shortLabel: 'কাউন্টডাউন', icon: Timer, accent: 'from-purple-500 to-pink-600' },
+  { id: 'admin', label: 'অ্যাডমিন', shortLabel: 'অ্যাডমিন', icon: Sliders, accent: 'from-purple-600 to-rose-600' },
 ];
 
 interface FloatingBottomNavProps {

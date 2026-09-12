@@ -348,6 +348,7 @@ export const SubjectsSlide: React.FC<SubjectsSlideProps> = ({
                 religionSubject={religionSubject}
                 suggestionProgress={suggestionProgress}
                 onToggleSuggestion={onToggleSuggestion}
+                currentStream={stream}
               />
             </div>
           ) : (

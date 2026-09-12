@@ -7,7 +7,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   User, BookOpen, Calendar, Target, Star, Timer, 
-  GraduationCap, Award, RotateCcw, AlertCircle, Bookmark, Sparkles
+  GraduationCap, Award, RotateCcw, AlertCircle, Bookmark, Sparkles, Sliders
 } from 'lucide-react';
 import { 
   StreamKey, 
@@ -36,6 +36,8 @@ import { RoutineView } from './components/RoutineView';
 import { CountdownView } from './components/CountdownView';
 import { SuggestionsView } from './components/SuggestionsView';
 import { FloatingBottomNav } from './components/FloatingBottomNav';
+import { SystemAdminPanel } from './components/SystemAdminPanel';
+import { AdminPasswordModal } from './components/AdminPasswordModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 const STORAGE_KEY = 'ssc_student_dashboard_v2';
@@ -97,6 +99,16 @@ export default function StudentDashboard() {
   });
 
   const [showResetModal, setShowResetModal] = useState(false);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
+  const [showAdminPasswordModal, setShowAdminPasswordModal] = useState<boolean>(false);
+
+  const handleOpenAdminPanel = () => {
+    if (isAdminAuthenticated) {
+      setActiveTab('admin');
+    } else {
+      setShowAdminPasswordModal(true);
+    }
+  };
 
   // Sync to localStorage
   useEffect(() => {
@@ -282,6 +294,42 @@ export default function StudentDashboard() {
     setShowResetModal(false);
   };
 
+  const handleResetSuggestions = () => {
+    setUserState((prev) => ({
+      ...prev,
+      suggestions: {},
+    }));
+  };
+
+  const handleUpdateStream = (newStream: StreamKey) => {
+    setUserState((prev) => ({
+      ...prev,
+      stream: newStream,
+      profile: {
+        ...prev.profile,
+        group: newStream === 'science' ? 'বিজ্ঞান (Science)' : newStream === 'business' ? 'ব্যবসায় শিক্ষা (Business)' : 'মানবিক (Humanities)',
+      },
+    }));
+  };
+
+  const handleUpdateReligion = (bn: ReligionBn) => {
+    const subKey = mapProfileReligionToSubjectKey(bn);
+    setUserState((prev) => ({
+      ...prev,
+      religion: subKey,
+      profile: {
+        ...prev.profile,
+        religion: bn,
+      },
+    }));
+  };
+
+  const handleImportState = (importedState: UserProgressState) => {
+    if (importedState && typeof importedState === 'object') {
+      setUserState(importedState);
+    }
+  };
+
   const handleSystemRestore = () => {
     setUserState({
       profile: DEFAULT_PROFILE,
@@ -329,15 +377,29 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
-              {/* Dynamic Religion Indicator Badge (Visible on mobile/desktop header) */}
-              <button
-                onClick={() => setActiveTab('syllabus')}
-                title="ক্লিক করে সিলেবাসে ধর্মীয় বই দেখুন"
-                className="lg:hidden px-2.5 py-1 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-bold font-anek flex items-center gap-1 shrink-0"
-              >
-                <Bookmark className="w-3 h-3 text-amber-400" />
-                <span>{userState.profile.religion || 'ইসলাম'}</span>
-              </button>
+              {/* Dynamic Religion Indicator Badge & Admin Shortcut (Visible on mobile/desktop header) */}
+              <div className="flex items-center gap-2 lg:hidden">
+                <button
+                  onClick={() => setActiveTab('syllabus')}
+                  title="ক্লিক করে সিলেবাসে ধর্মীয় বই দেখুন"
+                  className="px-2.5 py-1 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-bold font-anek flex items-center gap-1 shrink-0"
+                >
+                  <Bookmark className="w-3 h-3 text-amber-400" />
+                  <span>{userState.profile.religion || 'ইসলাম'}</span>
+                </button>
+                <button
+                  onClick={handleOpenAdminPanel}
+                  title="সিস্টেম অ্যাডমিন প্যানেল"
+                  className={`px-2.5 py-1 rounded-xl border text-[11px] font-bold font-anek flex items-center gap-1 shrink-0 ${
+                    activeTab === 'admin'
+                      ? 'bg-purple-600 text-white border-purple-400'
+                      : 'bg-purple-500/15 border-purple-500/30 text-purple-300'
+                  }`}
+                >
+                  <Sliders className="w-3 h-3 text-purple-400" />
+                  <span>অ্যাডমিন</span>
+                </button>
+              </div>
             </div>
 
             {/* Desktop Top Nav Switcher & Religion Status Pill */}
@@ -345,7 +407,7 @@ export default function StudentDashboard() {
               {/* Active Religion Pill */}
               <button
                 onClick={() => setActiveTab('syllabus')}
-                className="px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold font-anek flex items-center gap-1.5 transition-all hover:bg-amber-500/25"
+                className="px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold font-anek flex items-center gap-1.5 transition-all hover:bg-amber-500/25 cursor-pointer"
               >
                 <Bookmark className="w-3.5 h-3.5 text-amber-400" />
                 <span>ধর্ম: {religionSubject.name}</span>
@@ -360,14 +422,21 @@ export default function StudentDashboard() {
                   { id: 'progress' as NavTabKey, label: 'প্রোগ্রেস', icon: Target },
                   { id: 'suggestions' as NavTabKey, label: 'সাজেশন', icon: Star },
                   { id: 'countdown' as NavTabKey, label: 'কাউন্টডাউন', icon: Timer },
+                  { id: 'admin' as NavTabKey, label: 'অ্যাডমিন', icon: Sliders },
                 ].map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
                   return (
                     <button
                       key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`relative px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 z-10 ${
+                      onClick={() => {
+                        if (tab.id === 'admin') {
+                          handleOpenAdminPanel();
+                        } else {
+                          setActiveTab(tab.id);
+                        }
+                      }}
+                      className={`relative px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 z-10 cursor-pointer ${
                         isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
@@ -406,6 +475,7 @@ export default function StudentDashboard() {
                   onUpdateProfile={handleUpdateProfile}
                   onGoToSubjects={() => setActiveTab('syllabus')}
                   onGoToProgress={() => setActiveTab('progress')}
+                  onRequestAdminAccess={handleOpenAdminPanel}
                 />
               </motion.div>
             )}
@@ -497,9 +567,11 @@ export default function StudentDashboard() {
                   <SuggestionsView
                     compulsorySubjects={compulsory}
                     streamSubjects={streamSubjects}
+                    fourthSubject={fourthSubject}
                     religionSubject={religionSubject}
                     suggestionProgress={userState.suggestions}
                     onToggleSuggestion={handleToggleSuggestion}
+                    currentStream={userState.stream}
                   />
                 </div>
               </motion.div>
@@ -521,14 +593,60 @@ export default function StudentDashboard() {
                 />
               </motion.div>
             )}
+
+            {/* 7. 🛠️ সিস্টেম অ্যাডমিন প্যানেল (System Admin Control) */}
+            {activeTab === 'admin' && (
+              <motion.div
+                key="tab-admin"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25 }}
+              >
+                <SystemAdminPanel
+                  userState={userState}
+                  onUpdateStream={handleUpdateStream}
+                  onUpdateFourthSubject={handleFourthSubjectChange}
+                  onUpdateReligion={handleUpdateReligion}
+                  onResetProgress={handleResetProgress}
+                  onResetSuggestions={handleResetSuggestions}
+                  onFactoryReset={handleSystemRestore}
+                  onImportState={handleImportState}
+                  activeSubjects={allActiveSubjects}
+                  isAuthenticated={isAdminAuthenticated}
+                  onAuthenticate={(status) => setIsAdminAuthenticated(status)}
+                  onLockPanel={() => {
+                    setIsAdminAuthenticated(false);
+                    setActiveTab('profile');
+                  }}
+                />
+              </motion.div>
+            )}
           </AnimatePresence>
         </main>
 
         {/* MASTER FLOATING BOTTOM NAVIGATION BAR */}
         <FloatingBottomNav
           activeTab={activeTab}
-          onChangeTab={setActiveTab}
+          onChangeTab={(tab) => {
+            if (tab === 'admin' && !isAdminAuthenticated) {
+              setShowAdminPasswordModal(true);
+            } else {
+              setActiveTab(tab);
+            }
+          }}
           streakCount={userState.profile.streakDays}
+        />
+
+        {/* Password-Protected Admin Passcode Modal */}
+        <AdminPasswordModal
+          isOpen={showAdminPasswordModal}
+          onClose={() => setShowAdminPasswordModal(false)}
+          onSuccess={() => {
+            setIsAdminAuthenticated(true);
+            setShowAdminPasswordModal(false);
+            setActiveTab('admin');
+          }}
         />
 
         {/* Footer */}

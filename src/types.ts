@@ -6,6 +6,12 @@ export interface Chapter {
 export interface Suggestion {
   topic: string;
   priority: '⭐️⭐️⭐️' | '⭐️⭐️';
+  chapter?: string;
+  formulas?: string[];
+  breakdown?: string[];
+  cqTips?: string;
+  mcqTips?: string;
+  targetType?: 'CQ' | 'MCQ' | 'High Priority CQ/MCQ';
 }
 
 export interface Subject {
@@ -19,7 +25,7 @@ export type StreamKey = 'science' | 'business' | 'humanities';
 export type ReligionKey = 'islam' | 'hindu' | 'buddhist' | 'christian';
 export type ReligionBn = 'ইসলাম' | 'হিন্দু' | 'বৌদ্ধ' | 'খ্রিস্টান';
 
-export type NavTabKey = 'profile' | 'syllabus' | 'routine' | 'progress' | 'suggestions' | 'countdown';
+export type NavTabKey = 'profile' | 'syllabus' | 'routine' | 'progress' | 'suggestions' | 'countdown' | 'admin';
 
 export type ChapterStatus = 'not_started' | 'in_progress' | 'completed' | 'revised';
 

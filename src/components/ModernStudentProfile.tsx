@@ -4,7 +4,7 @@ import {
   User, School, MapPin, Phone, Calendar, 
   Sparkles, Upload, Edit3, Check, X, ShieldCheck,
   Camera, Award, CheckCircle2, Bookmark, Flame, ArrowRight,
-  RefreshCw, CheckCircle, Info, GraduationCap, BookOpen
+  RefreshCw, CheckCircle, Info, GraduationCap, BookOpen, Lock, KeyRound, ShieldAlert
 } from 'lucide-react';
 import { UserProfile, ReligionBn } from '../types';
 
@@ -52,6 +52,7 @@ interface ModernStudentProfileProps {
   onUpdateProfile: (updated: Partial<UserProfile>) => void;
   onGoToSubjects?: () => void;
   onGoToProgress?: () => void;
+  onRequestAdminAccess?: () => void;
 }
 
 export const ModernStudentProfile: React.FC<ModernStudentProfileProps> = ({
@@ -59,6 +60,7 @@ export const ModernStudentProfile: React.FC<ModernStudentProfileProps> = ({
   onUpdateProfile,
   onGoToSubjects,
   onGoToProgress,
+  onRequestAdminAccess,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<UserProfile>(profile);
@@ -182,34 +184,52 @@ export const ModernStudentProfile: React.FC<ModernStudentProfileProps> = ({
             </div>
           </div>
 
-          {/* Edit Toggle Button */}
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={() => {
-              if (isEditing) {
-                handleCancelEdit();
-              } else {
-                setFormData(profile);
-                setIsEditing(true);
-              }
-            }}
-            className={`self-start sm:self-auto flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-semibold transition-all shadow-lg ${
-              isEditing
-                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
-                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/25 border border-indigo-400/30'
-            }`}
-          >
-            {isEditing ? (
-              <>
-                <X className="w-3.5 h-3.5" /> বাতিল করুন
-              </>
-            ) : (
-              <>
-                <Edit3 className="w-3.5 h-3.5" /> প্রোফাইল এডিট করুন
-              </>
+          {/* Action Buttons: Edit Profile & Master Admin Access */}
+          <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-auto">
+            {onRequestAdminAccess && (
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                type="button"
+                id="btn-profile-master-admin-login"
+                onClick={onRequestAdminAccess}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shadow-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 hover:border-purple-400 font-jakarta cursor-pointer"
+                title="মাস্টার অ্যাডমিন পাসকোড ভেরিফিকেশন প্যানেল"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                <span>মাস্টার অ্যাডমিন লগইন</span>
+              </motion.button>
             )}
-          </motion.button>
+
+            {/* Edit Toggle Button */}
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => {
+                if (isEditing) {
+                  handleCancelEdit();
+                } else {
+                  setFormData(profile);
+                  setIsEditing(true);
+                }
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-semibold transition-all shadow-lg cursor-pointer ${
+                isEditing
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
+                  : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/25 border border-indigo-400/30'
+              }`}
+            >
+              {isEditing ? (
+                <>
+                  <X className="w-3.5 h-3.5" /> বাতিল করুন
+                </>
+              ) : (
+                <>
+                  <Edit3 className="w-3.5 h-3.5" /> প্রোফাইল এডিট করুন
+                </>
+              )}
+            </motion.button>
+          </div>
         </div>
 
         {/* Hero Section: Avatar & Identity Highlight */}
