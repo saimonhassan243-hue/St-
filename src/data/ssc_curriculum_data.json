@@ -1,0 +1,282 @@
+{
+  "curriculumName": "National Curriculum and Textbook Board (NCTB) Bangladesh - Secondary School Certificate (SSC)",
+  "educationLevel": "Class 9-10 (SSC)",
+  "version": "2026",
+  "compulsorySubjects": [
+    {
+      "id": "b1st",
+      "name": "বাংলা ১ম পত্র",
+      "enName": "Bangla 1st Paper",
+      "code": "101",
+      "category": "compulsory",
+      "sections": [
+        {
+          "title": "গদ্য",
+          "chapters": [
+            { "id": "b1_g1", "name": "গদ্য: শুভা", "author": "রবীন্দ্রনাথ ঠাকুর", "type": "গদ্য" },
+            { "id": "b1_g2", "name": "গদ্য: বই পড়া", "author": "প্রমথ চৌধুরী", "type": "গদ্য" },
+            { "id": "b1_g3", "name": "গদ্য: আম-আটির ভেঁপু", "author": "বিভূতিভূষণ বন্দ্যোপাধ্যায়", "type": "গদ্য" },
+            { "id": "b1_g4", "name": "গদ্য: মানুষ মুহম্মদ (স:)", "author": "মোহাম্মদ ওয়াজেদ আলী", "type": "গদ্য" },
+            { "id": "b1_g5", "name": "গদ্য: নিমগাছ", "author": "বনফুল (বলাইচাঁদ মুখোপাধ্যায়)", "type": "গদ্য" },
+            { "id": "b1_g6", "name": "গদ্য: শিক্ষা ও মনুষ্যত্ব", "author": "মোতাহের হোসেন চৌধুরী", "type": "গদ্য" },
+            { "id": "b1_g7", "name": "গদ্য: প্রবাস বন্ধু", "author": "সৈয়দ মুজতবা আলী", "type": "গদ্য" },
+            { "id": "b1_g8", "name": "গদ্য: মমতাদি", "author": "মানিক বন্দ্যোপাধ্যায়", "type": "গদ্য" },
+            { "id": "b1_g9", "name": "গদ্য: ৭১ এর দিনগুলি", "author": "জাহানারা ইমাম", "type": "গদ্য" },
+            { "id": "b1_g10", "name": "গদ্য: সাহিত্যের রূপ ও রীতি", "author": "হায়াৎ মামুদ", "type": "গদ্য" }
+          ]
+        },
+        {
+          "title": "পদ্য",
+          "chapters": [
+            { "id": "b1_p1", "name": "পদ্য: বঙ্গবাণী", "author": "আবদুল হাকিম", "type": "পদ্য" },
+            { "id": "b1_p2", "name": "পদ্য: কপোতাক্ষ নদ", "author": "মাইকেল মধুসূদন দত্ত", "type": "পদ্য" },
+            { "id": "b1_p3", "name": "পদ্য: জীবন-সংগীত", "author": "হেমচন্দ্র বন্দ্যোপাধ্যায়", "type": "পদ্য" },
+            { "id": "b1_p4", "name": "পদ্য: জুতা-আবিष्कार", "author": "রবীন্দ্রনাথ ঠাকুর", "type": "পদ্য" },
+            { "id": "b1_p5", "name": "পদ্য: ঝরনার গান", "author": "সত্যেন্দ্রনাথ দত্ত", "type": "পদ্য" },
+            { "id": "b1_p6", "name": "পদ্য: মানুষ", "author": "কাজী নজরুল ইসলাম", "type": "পদ্য" },
+            { "id": "b1_p7", "name": "পদ্য: সেই দিন এই মাঠ", "author": "জীবনানন্দ দাশ", "type": "পদ্য" },
+            { "id": "b1_p8", "name": "পদ্য: তোমাকে পাওয়ার জন্য হে স্বাধীনতা", "author": "শামসুর রাহমান", "type": "পদ্য" },
+            { "id": "b1_p9", "name": "পদ্য: আমার পরিচয়", "author": "সৈয়দ শামসুল হক", "type": "পদ্য" },
+            { "id": "b1_p10", "name": "পদ্য: স্বাধীনতা এ শব্দটি কিভাবে আমাদের হলো", "author": "নির্মলেন্দু গুণ", "type": "পদ্য" }
+          ]
+        }
+      ],
+      "chapters": [
+        { "id": "b1_g1", "name": "গদ্য: শুভা" },
+        { "id": "b1_g2", "name": "গদ্য: বই পড়া" },
+        { "id": "b1_g3", "name": "গদ্য: আম-আটির ভেঁপু" },
+        { "id": "b1_g4", "name": "গদ্য: মানুষ মুহম্মদ (স:)" },
+        { "id": "b1_g5", "name": "গদ্য: নিমগাছ" },
+        { "id": "b1_g6", "name": "গদ্য: শিক্ষা ও মনুষ্যত্ব" },
+        { "id": "b1_g7", "name": "গদ্য: প্রবাস বন্ধু" },
+        { "id": "b1_g8", "name": "গদ্য: মমতাদি" },
+        { "id": "b1_g9", "name": "গদ্য: ৭১ এর দিনগুলি" },
+        { "id": "b1_g10", "name": "গদ্য: সাহিত্যের রূপ ও রীতি" },
+        { "id": "b1_p1", "name": "পদ্য: বঙ্গবাণী" },
+        { "id": "b1_p2", "name": "পদ্য: কপোতাক্ষ নদ" },
+        { "id": "b1_p3", "name": "পদ্য: জীবন-সংগীত" },
+        { "id": "b1_p4", "name": "পদ্য: জুতা-আবিष्कार" },
+        { "id": "b1_p5", "name": "পদ্য: ঝরনার গান" },
+        { "id": "b1_p6", "name": "পদ্য: মানুষ" },
+        { "id": "b1_p7", "name": "পদ্য: সেই দিন এই মাঠ" },
+        { "id": "b1_p8", "name": "পদ্য: তোমাকে পাওয়ার জন্য হে স্বাধীনতা" },
+        { "id": "b1_p9", "name": "পদ্য: আমার পরিচয়" },
+        { "id": "b1_p10", "name": "পদ্য: স্বাধীনতা এ শব্দটি কিভাবে আমাদের হলো" }
+      ],
+      "suggestions": [
+        { "topic": "শুভা ও নিমগাছ গদ্যের মূলভাব ও সৃজনশীল", "priority": "⭐️⭐️⭐️" },
+        { "topic": "বঙ্গবাণী ও মানুষ কবিতার ভাবসম্প্রসারণ ও অনুধাবন", "priority": "⭐️⭐️⭐️" },
+        { "topic": "তোমাকে পাওয়ার জন্য হে স্বাধীনতা ও ৭১ এর দিনগুলি", "priority": "⭐️⭐️⭐️" },
+        { "topic": "শিক্ষা ও মনুষ্যত্ব এবং বই পড়া", "priority": "⭐️⭐️" }
+      ]
+    },
+    {
+      "id": "b2nd",
+      "name": "বাংলা ২য় পত্র",
+      "enName": "Bangla 2nd Paper",
+      "code": "102",
+      "category": "compulsory",
+      "chapters": [
+        { "id": "b2_1", "name": "১ম অধ্যায়: ভাষা ও ব্যাকরণ" },
+        { "id": "b2_2", "name": "২য় অধ্যায়: ধ্বনিতত্ত্ব" },
+        { "id": "b2_3", "name": "৩য় অধ্যায়: সন্ধি" },
+        { "id": "b2_4", "name": "৪র্থ অধ্যায়: শব্দরূপ" },
+        { "id": "b2_5", "name": "৫ম অধ্যায়: সমাস" },
+        { "id": "b2_6", "name": "৬ষ্ঠ অধ্যায়: উপসর্গ" },
+        { "id": "b2_7", "name": "৭ম অধ্যায়: প্রত্যয়" },
+        { "id": "b2_8", "name": "৮ম অধ্যায়: কারক ও বিভক্তি" },
+        { "id": "b2_9", "name": "৯ম অধ্যায়: বাক্য প্রকরণ" },
+        { "id": "b2_10", "name": "১০ম অধ্যায়: উক্তি পরিবর্তন" },
+        { "id": "b2_11", "name": "১১শ অধ্যায়: বিরাম চিহ্ন" }
+      ],
+      "suggestions": [
+        { "topic": "সমাস ও সন্ধির নিয়মাবলী", "priority": "⭐️⭐️⭐️" },
+        { "topic": "কারক ও বিভক্তি নির্ণয়", "priority": "⭐️⭐️⭐️" },
+        { "topic": "উপসর্গ ও প্রত্যয় যোগে শব্দ গঠন", "priority": "⭐️⭐️⭐️" },
+        { "topic": "উক্তি পরিবর্তন ও বাক্য প্রকরণ", "priority": "⭐️⭐️" }
+      ]
+    },
+    {
+      "id": "eng",
+      "name": "English 1st & 2nd Paper",
+      "enName": "English 1st & 2nd Paper",
+      "code": "107/108",
+      "category": "compulsory",
+      "sections": [
+        {
+          "title": "Reading",
+          "chapters": [
+            { "id": "eng_r1", "name": "Reading: Father of the Nation", "type": "Reading" },
+            { "id": "eng_r2", "name": "Reading: Environment & Nature", "type": "Reading" },
+            { "id": "eng_r3", "name": "Reading: Events & Festivals", "type": "Reading" },
+            { "id": "eng_r4", "name": "Reading: Educational Skills", "type": "Reading" }
+          ]
+        },
+        {
+          "title": "Grammar",
+          "chapters": [
+            { "id": "eng_g1", "name": "Grammar: Tag Questions", "type": "Grammar" },
+            { "id": "eng_g2", "name": "Grammar: Suffix-Prefix", "type": "Grammar" },
+            { "id": "eng_g3", "name": "Grammar: Right Form of Verbs", "type": "Grammar" },
+            { "id": "eng_g4", "name": "Grammar: Connectors", "type": "Grammar" },
+            { "id": "eng_g5", "name": "Grammar: Changing Sentences", "type": "Grammar" },
+            { "id": "eng_g6", "name": "Grammar: Prepositions", "type": "Grammar" }
+          ]
+        }
+      ],
+      "chapters": [
+        { "id": "eng_r1", "name": "Reading: Father of the Nation" },
+        { "id": "eng_r2", "name": "Reading: Environment & Nature" },
+        { "id": "eng_r3", "name": "Reading: Events & Festivals" },
+        { "id": "eng_r4", "name": "Reading: Educational Skills" },
+        { "id": "eng_g1", "name": "Grammar: Tag Questions" },
+        { "id": "eng_g2", "name": "Grammar: Suffix-Prefix" },
+        { "id": "eng_g3", "name": "Grammar: Right Form of Verbs" },
+        { "id": "eng_g4", "name": "Grammar: Connectors" },
+        { "id": "eng_g5", "name": "Grammar: Changing Sentences" },
+        { "id": "eng_g6", "name": "Grammar: Prepositions" }
+      ],
+      "suggestions": [
+        { "topic": "Right Form of Verbs & Subject-Verb Agreement", "priority": "⭐️⭐️⭐️" },
+        { "topic": "Changing Sentences (Voice & Transformation)", "priority": "⭐️⭐️⭐️" },
+        { "topic": "Reading Comprehension: Father of the Nation", "priority": "⭐️⭐️⭐️" },
+        { "topic": "Connectors & Tag Questions Rules", "priority": "⭐️⭐️" }
+      ]
+    },
+    {
+      "id": "gmath",
+      "name": "সাধারণ গণিত",
+      "enName": "General Mathematics",
+      "code": "109",
+      "category": "compulsory",
+      "chapters": [
+        { "id": "gm_1", "name": "১ম অধ্যায়: বাস্তব সংখ্যা" },
+        { "id": "gm_2", "name": "২য় অধ্যায়: সেট ও ফাংশন" },
+        { "id": "gm_3", "name": "৩য় অধ্যায়: বীজগণিতীয় রাশি" },
+        { "id": "gm_4", "name": "৪র্থ অধ্যায়: সূচক ও লগারিদম" },
+        { "id": "gm_5", "name": "৫ম অধ্যায়: এক চলকবিশিষ্ট সমীকরণ" },
+        { "id": "gm_6", "name": "৬ষ্ঠ অধ্যায়: রেখা কোণ ও ত্রিভুজ" },
+        { "id": "gm_7", "name": "৭ম অধ্যায়: ব্যবহারিক জ্যামিতি" },
+        { "id": "gm_8", "name": "৮ম অধ্যায়: বৃত্ত" },
+        { "id": "gm_9", "name": "৯ম অধ্যায়: ত্রিকোণমিতিক অনুপাত" },
+        { "id": "gm_10", "name": "১০ম অধ্যায়: দূরত্ব ও উচ্চতা" },
+        { "id": "gm_11", "name": "১১শ অধ্যায়: বীজগণিতীয় অনুপাত ও সমানুপাত" },
+        { "id": "gm_12", "name": "১২শ অধ্যায়: দুই চলকবিশিষ্ট সরল সহসমীকরণ" },
+        { "id": "gm_13", "name": "১৩শ অধ্যায়: সসীম ধারা" },
+        { "id": "gm_14", "name": "১৪শ অধ্যায়: অনুপাত সদৃশতা ও গাম্ভীর্য" },
+        { "id": "gm_15", "name": "১৫শ অধ্যায়: ক্ষেত্রফল সম্পর্কিত উপপাদ্য ও সম্পাদ্য" },
+        { "id": "gm_16", "name": "১৬শ অধ্যায়: পরিমিতি" },
+        { "id": "gm_17", "name": "১৭শ অধ্যায়: পরিসংখ্যান" }
+      ],
+      "suggestions": [
+        { "topic": "বীজগণিতীয় রাশি (অধ্যায় ৩ - উৎপাদক ও মান নির্ণয়)", "priority": "⭐️⭐️⭐️" },
+        { "topic": "বৃত্তের উপপাদ্য ১৭, ২০, ২৩ ও স্পর্শক (অধ্যায় ৮)", "priority": "⭐️⭐️⭐️" },
+        { "topic": "ত্রিকোণমিতিক অনুপাত ও অভেদাবলী (অধ্যায় ৯)", "priority": "⭐️⭐️⭐️" },
+        { "topic": "পরিসংখ্যান: সংক্ষিপ্ত পদ্ধতিতে গড়, মধ্যক ও প্রচুরক (অধ্যায় ১৭)", "priority": "⭐️⭐️⭐️" },
+        { "topic": "সসীম ধারা: সমান্তর ও গুণোত্তর ধারা (অধ্যায় ১৩)", "priority": "⭐️⭐️" },
+        { "topic": "ব্যবহারিক জ্যামিতি: সম্পাদ্য ১, ২, ৩ (অধ্যায় ৭)", "priority": "⭐️⭐️" }
+      ]
+    },
+    {
+      "id": "ict",
+      "name": "তথ্য ও যোগাযোগ প্রযুক্তি",
+      "enName": "Information and Communication Technology (ICT)",
+      "code": "154",
+      "category": "compulsory",
+      "chapters": [
+        { "id": "ict_1", "name": "১ম অধ্যায়: তথ্য ও যোগাযোগ প্রযুক্তি এবং আমাদের বাংলাদেশ" },
+        { "id": "ict_2", "name": "২য় অধ্যায়: কম্পিউটার ও কম্পিউটার ব্যবহারকারীর নিরাপত্তা" },
+        { "id": "ict_3", "name": "৩য় অধ্যায়: আমার শিক্ষায় ইন্টারনেট" },
+        { "id": "ict_4", "name": "৪র্থ অধ্যায়: আমার লেখালেখি ও হিসাব" },
+        { "id": "ict_5", "name": "৫ম অধ্যায়: মাল্টিমিডিয়া ও গ্রাফিক্স" },
+        { "id": "ict_6", "name": "৬ষ্ঠ অধ্যায়: ডেটাবেজ এর ব্যবহার" }
+      ],
+      "suggestions": [
+        { "topic": "আমার শিক্ষায় ইন্টারনেট ও ই-লার্নিং (অধ্যায় ৩)", "priority": "⭐️⭐️⭐️" },
+        { "topic": "মাল্টিমিডিয়া ও গ্রাফিক্স: ফটোশপ ও ইলাস্ট্রেটর (অধ্যায় ৫)", "priority": "⭐️⭐️⭐️" },
+        { "topic": "কম্পিউটার ভাইরাস ও সফটওয়্যার নিরাপত্তা (অধ্যায় ২)", "priority": "⭐️⭐️⭐️" },
+        { "topic": "ডেটাবেজ ও স্প্রেডশিট ফর্মুলা (অধ্যায় ৪ ও ৬)", "priority": "⭐️⭐️" }
+      ]
+    }
+  ],
+  "religionSubjects": {
+    "islam": {
+      "id": "islam",
+      "name": "ইসলাম ও নৈতিক শিক্ষা",
+      "enName": "Islam and Moral Education",
+      "code": "111",
+      "religion": "ইসলাম",
+      "chapters": [
+        { "id": "is_1", "name": "১ম অধ্যায়: আকাইদ ও নৈতিক জীবন" },
+        { "id": "is_2", "name": "২য় অধ্যায়: শরীয়তের উৎস" },
+        { "id": "is_3", "name": "৩য় অধ্যায়: ইবাদত" },
+        { "id": "is_4", "name": "৪র্থ অধ্যায়: আখলাক" },
+        { "id": "is_5", "name": "৫ম অধ্যায়: আদর্শ জীবনচরিত" }
+      ],
+      "suggestions": [
+        { "topic": "আকাইদ ও তাওহীদের বাস্তব প্রভাব", "priority": "⭐️⭐️⭐️" },
+        { "topic": "সালাত, সওম ও যাকাতের সামাজিক গুরুত্ব", "priority": "⭐️⭐️⭐️" },
+        { "topic": "আখলাকে হামিদা ও আখলাকে যমিমাহ পরিহার", "priority": "⭐️⭐️⭐️" },
+        { "topic": "হযরত মুহাম্মদ (স:) এর মদিনা সনদ ও বিদায় হজ", "priority": "⭐️⭐️" }
+      ]
+    },
+    "hindu": {
+      "id": "hindu",
+      "name": "হিন্দুধর্ম ও নৈতিক শিক্ষা",
+      "enName": "Hinduism and Moral Education",
+      "code": "112",
+      "religion": "হিন্দু",
+      "chapters": [
+        { "id": "hin_1", "name": "১ম অধ্যায়: ঈশ্বরতত্ত্ব" },
+        { "id": "hin_2", "name": "২য় অধ্যায়: দেবী-দেবতা ও পূজা" },
+        { "id": "hin_3", "name": "৩য় অধ্যায়: ধর্মগ্রন্থ" },
+        { "id": "hin_4", "name": "৪র্থ অধ্যায়: সনাতন ধর্ম ও নৈতিক জীবন" },
+        { "id": "hin_5", "name": "৫ম অধ্যায়: সদাচার" }
+      ],
+      "suggestions": [
+        { "topic": "শ্রীমদ্ভগবদ্গীতার শিক্ষা ও নিষ্কাম কর্মযোগ", "priority": "⭐️⭐️⭐️" },
+        { "topic": "ঈশ্বরতত্ত্ব ও ব্রহ্মের স্বরূপ উপলব্ধি", "priority": "⭐️⭐️⭐️" },
+        { "topic": "দেবী-দেবতা পূজা মাহাত্ম্য ও সামাজিক সম্প্রীতি", "priority": "⭐️⭐️" },
+        { "topic": "সদাচার ও অহিংসা ব্রতের নৈতিক গুরুত্ব", "priority": "⭐️⭐️" }
+      ]
+    },
+    "buddhist": {
+      "id": "buddhist",
+      "name": "বৌদ্ধধর্ম ও নৈতিক শিক্ষা",
+      "enName": "Buddhism and Moral Education",
+      "code": "113",
+      "religion": "বৌদ্ধ",
+      "chapters": [
+        { "id": "bud_1", "name": "১ম অধ্যায়: বুদ্ধ ও বুদ্ধতত্ত্ব" },
+        { "id": "bud_2", "name": "২য় অধ্যায়: ত্রিপিটক" },
+        { "id": "bud_3", "name": "৩য় অধ্যায়: বৌদ্ধ নীতিশাস্ত্র" },
+        { "id": "bud_4", "name": "৪র্থ অধ্যায়: বিদর্শন ভাবনা" }
+      ],
+      "suggestions": [
+        { "topic": "চতুরার্য সত্য ও অষ্টাঙ্গিক মার্গ অনুশীলন", "priority": "⭐️⭐️⭐️" },
+        { "topic": "ত্রিপিটকের বিনয়, সুত্র ও অভিধর্ম পিটক পরিচিতি", "priority": "⭐️⭐️⭐️" },
+        { "topic": "বিদর্শন ভাবনার একাগ্রতা ও চিত্তশুদ্ধি", "priority": "⭐️⭐️" },
+        { "topic": "বৌদ্ধ নীতিশাস্ত্র ও পঞ্চশীল পালন", "priority": "⭐️⭐️" }
+      ]
+    },
+    "christian": {
+      "id": "christian",
+      "name": "খ্রিস্টধর্ম ও নৈতিক শিক্ষা",
+      "enName": "Christianity and Moral Education",
+      "code": "114",
+      "religion": "খ্রিস্টান",
+      "chapters": [
+        { "id": "chr_1", "name": "১ম অধ্যায়: ঈশ্বরতত্ত্ব" },
+        { "id": "chr_2", "name": "২য় অধ্যায়: বাইবেল" },
+        { "id": "chr_3", "name": "৩য় অধ্যায়: খ্রিষ্টীয় চরিত্র ও নৈতিকতা" },
+        { "id": "chr_4", "name": "৪র্থ অধ্যায়: সামাজিক জীবন" }
+      ],
+      "suggestions": [
+        { "topic": "যিশু খ্রিস্টের গিরিপ্রবচন ও দশ আজ্ঞা", "priority": "⭐️⭐️⭐️" },
+        { "topic": "বাইবেলের পুরাতন ও নতুন নিয়মের বার্তা", "priority": "⭐️⭐️⭐️" },
+        { "topic": "খ্রিষ্টীয় চরিত্র, ক্ষমা ও প্রেম ভালোবাসা", "priority": "⭐️⭐️" },
+        { "topic": "সামাজিক জীবনে ভ্রাতৃত্ব ও বিশ্বমানবতার সেবা", "priority": "⭐️⭐️" }
+      ]
+    }
+  }
+}

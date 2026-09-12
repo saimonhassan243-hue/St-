@@ -1,0 +1,6 @@
+{
+  "name": "SSC Student Dashboard & Syllabus Tracker",
+  "description": "Comprehensive student dashboard with master floating bottom navigation, dynamic religion textbook filtering, interactive syllabus tracker, routine, suggestions, and countdown.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Hind Siliguri', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #0F172A;
+    color: #F8FAFC;
+  }
+}
+
+.font-anek {
+  font-family: 'Anek Bangla', system-ui, -apple-system, sans-serif;
+}
+
+.font-jakarta {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+
+.font-hind {
+  font-family: 'Hind Siliguri', system-ui, -apple-system, sans-serif;
+}
+
+@media print {
+  header, footer, #btn-print-summary, #btn-reset-progress, button {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .shadow-xs, .shadow-sm, .shadow-md, .shadow-xl {
+    box-shadow: none !important;
+  }
+}
