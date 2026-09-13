@@ -1,0 +1,8 @@
+{
+  "appId": "com.saimon.ssctracker",
+  "appName": "SSC Prep & Routine Tracker",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

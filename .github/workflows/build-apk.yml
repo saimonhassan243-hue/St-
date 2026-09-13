@@ -1,0 +1,90 @@
+name: Build Android APK & Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Build & Release Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build Web Application
+        run: npm run build
+
+      - name: Add & Sync Capacitor Android
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+
+      - name: Build Android Debug APK
+        run: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --stacktrace
+          cd ..
+
+      - name: Copy & Prepare APK Artifact
+        run: |
+          mkdir -p build-output
+          cp android/app/build/outputs/apk/debug/app-debug.apk build-output/SSC-Prep-Routine-Tracker-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk build-output/app-debug.apk
+
+      - name: Upload APK as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssc-tracker-apk
+          path: build-output/*.apk
+          retention-days: 30
+
+      - name: Create GitHub Release & Upload APK
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: "SSC Prep & Routine Tracker v1.0.${{ github.run_number }}"
+          body: |
+            ### 📱 SSC Prep & Routine Tracker - Android APK Release
+            - **App ID**: `com.saimon.ssctracker`
+            - **App Name**: `SSC Prep & Routine Tracker`
+            - **Commit**: `${{ github.sha }}`
+            - **Branch**: `${{ github.ref_name }}`
+            - **Build Number**: `#${{ github.run_number }}`
+
+            #### 📥 Download & Installation
+            Download the attached `app-debug.apk` or `SSC-Prep-Routine-Tracker-debug.apk` to install on your Android device.
+          files: |
+            build-output/app-debug.apk
+            build-output/SSC-Prep-Routine-Tracker-debug.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

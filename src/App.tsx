@@ -366,13 +366,13 @@ export default function StudentDashboard() {
                       SSC MASTER PLATFORM
                     </h1>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-anek">
-                      {userState.profile.sscBatch}
+                      {userState?.profile?.sscBatch || 'SSC 2028'}
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400 flex items-center gap-1.5 font-anek truncate max-w-xs sm:max-w-sm">
-                    <span className="text-slate-200 font-semibold">{userState.profile.name}</span>
+                    <span className="text-slate-200 font-semibold">{userState?.profile?.name || 'শিক্ষার্থী'}</span>
                     <span className="w-1 h-1 rounded-full bg-slate-600 shrink-0" />
-                    <span className="truncate">{userState.profile.school}</span>
+                    <span className="truncate">{userState?.profile?.school || 'বিদ্যালয়'}</span>
                   </p>
                 </div>
               </div>
@@ -385,7 +385,7 @@ export default function StudentDashboard() {
                   className="px-2.5 py-1 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-bold font-anek flex items-center gap-1 shrink-0"
                 >
                   <Bookmark className="w-3 h-3 text-amber-400" />
-                  <span>{userState.profile.religion || 'ইসলাম'}</span>
+                  <span>{userState?.profile?.religion || 'ইসলাম'}</span>
                 </button>
                 <button
                   onClick={handleOpenAdminPanel}
@@ -653,10 +653,10 @@ export default function StudentDashboard() {
         <footer className="w-full text-center text-xs text-slate-500 py-6 border-t border-white/5 bg-slate-950/40">
           <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2 font-anek">
             <span className="text-slate-400">
-              {userState.profile.name} • {userState.profile.school} ({userState.profile.sscBatch})
+              {userState?.profile?.name || 'মো: সাইমন হাসান'} • {userState?.profile?.school || 'সরকারি জিলা স্কুল'} ({userState?.profile?.sscBatch || 'SSC 2028'})
             </span>
             <span className="text-slate-600">
-              ধর্ম পাঠ্যবই: {religionSubject.name} • Enterprise Dark Edition
+              ধর্ম পাঠ্যবই: {religionSubject?.name || 'ইসলাম ও নৈতিক শিক্ষা'} • Enterprise Dark Edition
             </span>
           </div>
         </footer>

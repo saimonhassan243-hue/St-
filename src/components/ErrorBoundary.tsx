@@ -64,12 +64,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             </div>
 
             <h3 className="text-lg sm:text-xl font-bold text-white mb-2 font-jakarta">
-              SYSTEM RESTORE & RECOVERY
+              কিছু একটা সমস্যা হয়েছে
             </h3>
 
             <p className="text-xs sm:text-sm text-slate-300 mb-4 leading-relaxed">
               {this.props.fallbackMessage || 
-                'অ্যাপ্লিকেশন লোড করতে সাময়িক একটি অপ্রত্যাশিত ত্রুটি ঘটেছে। আপনার ডেটা ও প্রোফাইল নিরাপদে সুরক্ষিত রয়েছে।'}
+                'কিছু একটা সমস্যা হয়েছে, অ্যাপটি পুনরায় চালু করুন'}
             </p>
 
             {this.state.error && (

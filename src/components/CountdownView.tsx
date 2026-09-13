@@ -49,7 +49,7 @@ export const CountdownView: React.FC<CountdownViewProps> = ({
       {/* 1. LIVE EXAM COUNTDOWN TIMER WIDGET (GLASSMORPHIC WITH PULSING INDICATOR) */}
       <ExamCountdownWidget
         targetDate={examDate || '2028-02-15T09:00:00'}
-        batchLabel={profile.sscBatch || 'SSC 2028'}
+        batchLabel={profile?.sscBatch || 'SSC 2028'}
         onUpdateTargetDate={onUpdateExamDate}
         variant="hero"
       />
