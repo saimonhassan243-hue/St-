@@ -4,8 +4,16 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  const plugins = [react()];
+
+  try {
+    plugins.push(tailwindcss());
+  } catch (error) {
+    console.warn('Tailwind CSS plugin failed to initialize; continuing build without it:', error);
+  }
+
   return {
-    plugins: [react(), tailwindcss()],
+    plugins,
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
