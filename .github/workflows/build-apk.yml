@@ -34,15 +34,7 @@ jobs:
           node-version: 18
 
       - name: Install Dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --include=optional || npm install --force --include=optional
-          else
-            npm install --force --include=optional
-          fi
-
-      - name: Rebuild Native Dependencies
-        run: npm rebuild
+        run: npm install --legacy-peer-deps
 
       - name: Build Web Application
         run: npm run build
