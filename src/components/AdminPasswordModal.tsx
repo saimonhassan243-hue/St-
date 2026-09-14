@@ -110,7 +110,7 @@ export const AdminPasswordModal: React.FC<AdminPasswordModalProps> = ({
                     setPasscode(e.target.value);
                     if (errorMessage) setErrorMessage(null);
                   }}
-                  placeholder="অ্যাডমিন পাসকোড দিন..."
+                  placeholder="পাসওয়ার্ড দিন"
                   autoFocus
                   className={`w-full px-4 py-3 pl-10 pr-11 rounded-2xl bg-slate-950/90 border text-white placeholder-slate-500 text-xs font-mono tracking-widest focus:outline-none transition-all shadow-inner text-center ${
                     errorMessage

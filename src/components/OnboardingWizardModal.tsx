@@ -25,6 +25,7 @@ interface OnboardingWizardModalProps {
   initialStream: StreamKey;
   initialFourthSubject: FourthSubjectKey;
   initialReligion?: ReligionKey;
+  initialCustomSelectedChapterIds?: string[];
   currentUser?: FirebaseUserData | null;
   onComplete: (data: {
     profile: Partial<UserProfile>;
@@ -38,7 +39,7 @@ interface OnboardingWizardModalProps {
 
 interface WizardStepMeta {
   id: string;
-  type: 'group' | 'fourth_subject' | 'religion' | 'subject_checklist' | 'completion';
+  type: 'mode_selection' | 'group' | 'fourth_subject' | 'religion' | 'subject_checklist' | 'completion';
   title: string;
   subtitle: string;
   badge: string;
@@ -53,18 +54,24 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
   initialStream,
   initialFourthSubject,
   initialReligion,
+  initialCustomSelectedChapterIds,
   currentUser,
   onComplete,
 }) => {
   // Wizard Step Index (Always starts at Step 1 / Index 0)
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
+  const [wizardMode, setWizardMode] = useState<'standard' | 'custom'>('standard');
 
   // Reset to Step 1 whenever modal is opened
   React.useEffect(() => {
     if (isOpen) {
       setCurrentStepIndex(0);
+      setWizardMode('standard');
+      if (initialCustomSelectedChapterIds && initialCustomSelectedChapterIds.length > 0) {
+        setSelectedChapterIds(new Set(initialCustomSelectedChapterIds));
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, initialCustomSelectedChapterIds]);
 
   // Core Form State
   const [name, setName] = useState(currentUser?.name || initialProfile.name || 'মো: সাইমন হাসান');
@@ -77,6 +84,9 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
 
   // Custom chapter selection set (defaults to all chapters selected for 100% complete syllabus)
   const [selectedChapterIds, setSelectedChapterIds] = useState<Set<string>>(() => {
+    if (initialCustomSelectedChapterIds && initialCustomSelectedChapterIds.length > 0) {
+      return new Set(initialCustomSelectedChapterIds);
+    }
     const ids = new Set<string>();
     // Pre-populate compulsory
     COMPULSORY_SUBJECTS.forEach((sub) => sub.chapters.forEach((ch) => ids.add(ch.id)));
@@ -94,25 +104,32 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
   const activeSequence = useMemo<WizardStepMeta[]>(() => {
     const steps: WizardStepMeta[] = [
       {
+        id: 'step_mode',
+        type: 'mode_selection',
+        title: 'সিলেবাস তৈরির ধরণ নির্ধারণ (Step 0)',
+        subtitle: 'বোর্ড স্ট্যান্ডার্ড স্বয়ংক্রিয় সিলেবাস নাকি কাস্টমাইজড সিলেবাস?',
+        badge: 'ধাপ ০: সিলেবাস মোড',
+      },
+      {
         id: 'step_group',
         type: 'group',
-        title: 'আপনার বিভাগ সিলেক্ট করুন',
+        title: 'আপনার বিভাগ সিলেক্ট করুন (Step 1)',
         subtitle: 'বিজ্ঞান, মানবিক নাকি ব্যবসায় শিক্ষা? আপনার বিভাগ নির্বাচন করুন',
-        badge: 'বিভাগ নির্বাচন',
+        badge: 'ধাপ ১: বিভাগ নির্বাচন',
       },
       {
         id: 'step_fourth_sub',
         type: 'fourth_subject',
-        title: 'আপনার ৪র্থ বিষয় সিলেক্ট করুন',
+        title: 'আপনার ৪র্থ বিষয় সিলেক্ট করুন (Step 2)',
         subtitle: 'উচ্চতর গণিত, জীববিজ্ঞান, কৃষি শিক্ষা বা গার্হস্থ্য বিজ্ঞান বেছে নিন',
-        badge: '৪র্থ বিষয়',
+        badge: 'ধাপ ২: ৪র্থ বিষয়',
       },
       {
         id: 'step_religion',
         type: 'religion',
-        title: 'আপনার ধর্ম সিলেক্ট করুন',
+        title: 'আপনার ধর্ম সিলেক্ট করুন (Step 3)',
         subtitle: 'ধর্ম ও নৈতিক শিক্ষার সঠিক পাঠ্যবই সিলেবাসে যুক্ত করতে নির্বাচন করুন',
-        badge: 'ধর্ম নির্বাচন',
+        badge: 'ধাপ ৩: ধর্ম নির্বাচন',
       },
     ];
 
@@ -386,7 +403,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
       setCurrentStepIndex(clampedStepIndex + 1);
     } else {
       // Final Complete Action
-      handleFinishWizard();
+      handleFinishWizard(wizardMode);
     }
   };
 
@@ -396,13 +413,20 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
     }
   };
 
-  const handleFinishWizard = () => {
+  const handleFinishWizard = (path: 'standard' | 'custom' = 'standard') => {
     const relKey = mapProfileReligionToSubjectKey(selectedReligion);
     const groupMap: Record<StreamKey, string> = {
       science: 'বিজ্ঞান (Science)',
       business: 'ব্যবসায় শিক্ষা (Business Studies)',
       humanities: 'মানবিক (Humanities)',
     };
+
+    let finalChapterIds: string[] | undefined;
+    if (path === 'standard') {
+      finalChapterIds = undefined; // undefined indicates standard / all chapters included
+    } else {
+      finalChapterIds = Array.from(selectedChapterIds);
+    }
 
     onComplete({
       profile: {
@@ -416,8 +440,8 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
       stream: selectedStream,
       religion: relKey,
       fourthSubject,
-      syllabusPath: 'standard',
-      customSelectedChapterIds: Array.from(selectedChapterIds),
+      syllabusPath: path,
+      customSelectedChapterIds: finalChapterIds,
     });
   };
 
@@ -488,6 +512,126 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
         {/* Dynamic Wizard Body with Smooth Slide Transition */}
         <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-5 bg-[#0D111D] transform-gpu">
           <AnimatePresence mode="wait">
+            {/* STEP 0: SYLLABUS CREATION MODE (BOARD STANDARD VS CUSTOM) */}
+            {currentStep.type === 'mode_selection' && (
+              <motion.div
+                key="step-mode-selection"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-6"
+              >
+                <div className="p-4 rounded-2xl bg-[#151C2C] border border-white/10 space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+                    <Compass className="w-4 h-4" />
+                    <span>সিলেবাস কনফিগারেশন মোড নির্বাচন</span>
+                  </div>
+                  <p className="text-xs text-slate-300 font-anek leading-relaxed">
+                    আপনার এসএসসি ২০২৮ প্রস্তুতির জন্য আপনি কোন ধরণের সিলেবাস সেটআপ পছন্দ করবেন তা নির্বাচন করুন।
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Option A: Board Standard Syllabus (NCTB Auto-Setup) */}
+                  <div className="p-5 rounded-3xl bg-gradient-to-b from-[#151C2C] to-[#0D111D] border-2 border-emerald-500/60 shadow-xl shadow-emerald-950/50 relative overflow-hidden flex flex-col justify-between group hover:border-emerald-400 transition-all">
+                    <div className="absolute top-3 right-3 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-extrabold font-anek flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-emerald-400" />
+                      <span>সুপারিশকৃত • ১-ক্লিক</span>
+                    </div>
+
+                    <div>
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 mb-4 shadow-lg shadow-emerald-950/60">
+                        <Award className="w-6 h-6" />
+                      </div>
+                      <h4 className="text-base font-bold text-white font-hind leading-snug">
+                        বোর্ড স্ট্যান্ডার্ড সিলেবাস
+                      </h4>
+                      <p className="text-[11px] text-emerald-400 font-mono font-bold mt-0.5">
+                        NCTB Auto-Setup (SSC 2028)
+                      </p>
+                      <p className="text-xs text-slate-300 mt-3 font-anek leading-relaxed">
+                        NCTB ২০২৮ বোর্ড স্ট্যান্ডার্ড কারিকুলাম অনুযায়ী বাংলা, ইংরেজি, গণিত, বিজ্ঞান গ্রুপ, ৪র্থ বিষয় ও ধর্মসহ শতভাগ অধ্যায় এক ক্লিকে স্বয়ংক্রিয়ভাবে লোড হবে।
+                      </p>
+                      
+                      <div className="mt-4 space-y-1.5 text-[11px] text-slate-400 font-anek">
+                        <div className="flex items-center gap-1.5 text-emerald-300">
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>সকল আবশ্যিক ও গ্রুপ বিষয় শতভাগ অন্তর্ভুক্ত</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-emerald-300">
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>বাংলাদেশ ও বিশ্বপরিচয় (Strictly বিজ্ঞান গ্রুপ)</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-emerald-300">
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>তাৎক্ষণিক ড্যাশবোর্ড সক্রিয়করণ</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleFinishWizard('standard')}
+                      className="mt-6 w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-400 hover:to-green-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 cursor-pointer font-anek transition-all"
+                    >
+                      <Sparkles className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                      <span>১-ক্লিকে বোর্ড সিলেবাস সেট করুন</span>
+                    </button>
+                  </div>
+
+                  {/* Option B: Customized Syllabus (Custom Setup) */}
+                  <div className="p-5 rounded-3xl bg-[#151C2C]/80 border border-white/15 hover:border-cyan-400/50 transition-all flex flex-col justify-between relative group">
+                    <div className="absolute top-3 right-3 px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold font-anek">
+                      <span>ব্যক্তিগত পছন্দ</span>
+                    </div>
+
+                    <div>
+                      <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 mb-4 shadow-lg shadow-cyan-950/60">
+                        <Layers className="w-6 h-6" />
+                      </div>
+                      <h4 className="text-base font-bold text-white font-hind leading-snug">
+                        কাস্টমাইজড সিলেবাস
+                      </h4>
+                      <p className="text-[11px] text-cyan-400 font-mono font-bold mt-0.5">
+                        Custom Step-by-Step Setup
+                      </p>
+                      <p className="text-xs text-slate-300 mt-3 font-anek leading-relaxed">
+                        ধাপে ধাপে আপনার বিভাগ, ৪র্থ বিষয়, ধর্ম এবং অধ্যায়ভিত্তিক চেকলিস্ট কাস্টমাইজ করুন। আপনার পড়া অনুযায়ী অধ্যায় বাদ বা যোগ করার সুযোগ থাকবে।
+                      </p>
+
+                      <div className="mt-4 space-y-1.5 text-[11px] text-slate-400 font-anek">
+                        <div className="flex items-center gap-1.5 text-cyan-300">
+                          <Check className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>বিভাগ ও ৪র্থ বিষয় বাছাইয়ের সুযোগ</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-cyan-300">
+                          <Check className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>অধ্যায়ভিত্তিক নির্বাচন ও বাদ দেওয়ার স্বাধীনতা</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-cyan-300">
+                          <Check className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>ব্যক্তিগত অধ্যয়ন পরিকল্পনা তৈরি</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWizardMode('custom');
+                        setCurrentStepIndex(1);
+                      }}
+                      className="mt-6 w-full py-3 px-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white border border-white/10 hover:border-cyan-400/40 font-bold text-xs shadow-md flex items-center justify-center gap-2 cursor-pointer font-anek transition-all"
+                    >
+                      <span>কাস্টম উইজার্ড শুরু করুন</span>
+                      <ArrowRight className="w-4 h-4 text-cyan-400" />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
             {/* STEP 1: GROUP / STREAM SELECTION */}
             {currentStep.type === 'group' && (
               <motion.div

@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   User, BookOpen, Calendar, Target, Star, Timer, 
   GraduationCap, Award, RotateCcw, AlertCircle, Bookmark, Sparkles,
-  Shield, ShieldAlert, KeyRound
+  Shield, ShieldAlert, KeyRound, AlertTriangle, BarChart3
 } from 'lucide-react';
 import { 
   StreamKey, 
@@ -40,6 +40,9 @@ import { RoutineView } from './components/RoutineView';
 import { CountdownView } from './components/CountdownView';
 import { SuggestionsView } from './components/SuggestionsView';
 import { FloatingBottomNav } from './components/FloatingBottomNav';
+import { WeakPointTrackerView } from './components/WeakPointTrackerView';
+import { GamificationView } from './components/GamificationView';
+import { AnalyticsDashboardView } from './components/AnalyticsDashboardView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { EmergencyBroadcastLockOverlay } from './components/EmergencyBroadcastLockOverlay';
 import { SystemAdminPanel } from './components/SystemAdminPanel';
@@ -61,14 +64,20 @@ import {
 import { 
   getLocalAuthUser, 
   syncUserToFirebase, 
+  syncCompletionPercentageToFirebase,
   calculateStudyMinutes, 
   sanitizeUserId,
   hasActiveAuthSession,
   saveLocalAuthSession,
   clearLocalAuthSession,
   hasCompletedOnboardingCheck,
-  setOnboardingCompleted
+  setOnboardingCompleted,
+  isSyllabusConfiguredCheck,
+  setSyllabusConfigured,
+  syncSyllabusConfigToFirebase,
+  fetchSyllabusConfigFromFirebase
 } from './services/firebaseUserService';
+import { calculateAlgorithmicProgress } from './utils/progressCalculator';
 
 const STORAGE_KEY = 'ssc_student_dashboard_v2';
 
@@ -90,6 +99,9 @@ const DEFAULT_PROFILE: UserProfile = {
 export default function StudentDashboard() {
   // ১. মাস্টার নেভিগেশন স্টেট: ৬টি অপশন
   const [activeTab, setActiveTab] = useState<NavTabKey>('profile');
+  const [isSyllabusConfiguredState, setIsSyllabusConfiguredState] = useState<boolean>(() => {
+    return isSyllabusConfiguredCheck();
+  });
 
   // ২. স্টেট লোডিং ও ডিফল্ট ফলব্যাক অ্যাসুরেন্স
   const [userState, setUserState] = useState<UserProgressState>(() => {
@@ -110,6 +122,7 @@ export default function StudentDashboard() {
           religion: mapProfileReligionToSubjectKey(savedProfileReligion),
           fourthSubject: parsed.fourthSubject || 'hmath',
           customSelectedChapterIds: parsed.customSelectedChapterIds,
+          isSyllabusConfigured: isSyllabusConfiguredCheck(),
           chapters: parsed.chapters || {},
           suggestions: parsed.suggestions || {},
           examDate: parsed.examDate || '2028-02-15',
@@ -122,6 +135,7 @@ export default function StudentDashboard() {
       profile: DEFAULT_PROFILE,
       stream: 'science',
       religion: 'islam',
+      isSyllabusConfigured: isSyllabusConfiguredCheck(),
       chapters: {},
       suggestions: {},
       examDate: '2028-02-15',
@@ -220,6 +234,7 @@ export default function StudentDashboard() {
       onboarding_completed: hasOnboardingCompleted,
       streak_count: userState.profile.streakDays || currentUser.streak_count || 15,
       total_study_minutes: totalMinutes,
+      completion_percentage: overallProgressData.totalProgressPercent,
       last_login: new Date().toISOString(),
     };
     syncUserToFirebase(updatedUser).then((res) => {
@@ -270,12 +285,32 @@ export default function StudentDashboard() {
     setShowAuthModal(true);
   };
 
+  const handleReconfigureSyllabus = () => {
+    setSyllabusConfigured(false);
+    setIsSyllabusConfiguredState(false);
+    if (currentUser?.userId) {
+      syncSyllabusConfigToFirebase(currentUser.userId, { isSyllabusConfigured: false });
+    }
+    setWizardKey((prev) => prev + 1);
+    setShowOnboardingWizard(true);
+  };
+
   const handleTabSelect = (tab: NavTabKey) => {
     if (tab === 'syllabus') {
-      // Force-reset the wizard state to Step 1 and open overlay modal immediately
-      setWizardKey((prev) => prev + 1);
-      setShowOnboardingWizard(true);
-      setShowSyllabusAlert(false);
+      const isConfigured = isSyllabusConfiguredCheck();
+      if (!isConfigured) {
+        // If not configured, show Step 0 Modal
+        setWizardKey((prev) => prev + 1);
+        setShowOnboardingWizard(true);
+        setShowSyllabusAlert(false);
+        return;
+      }
+      // If configured, render full Chapter Tracker directly without redirects or popups
+      setActiveTab('syllabus');
+      return;
+    }
+    if (tab === 'admin') {
+      setShowAdminPanel(true);
       return;
     }
     setActiveTab(tab);
@@ -291,6 +326,8 @@ export default function StudentDashboard() {
   }) => {
     setOnboardingCompleted(true);
     setHasOnboardingCompleted(true);
+    setSyllabusConfigured(true);
+    setIsSyllabusConfiguredState(true);
     setShowOnboardingWizard(false);
     setShowSyllabusAlert(false);
 
@@ -303,6 +340,7 @@ export default function StudentDashboard() {
       syllabusPath: data.syllabusPath,
       customSelectedChapterIds: data.customSelectedChapterIds,
       hasCompletedOnboarding: true,
+      isSyllabusConfigured: true,
     }));
 
     const fourthSubjectObj = FOURTH_SUBJECT_OPTIONS.find(f => f.id === data.fourthSubject);
@@ -318,7 +356,36 @@ export default function StudentDashboard() {
     };
     setCurrentUser(updatedUser);
     syncUserToFirebase(updatedUser).catch((err) => console.warn('Silent sync catch:', err));
+    if (currentUser?.userId) {
+      syncSyllabusConfigToFirebase(currentUser.userId, {
+        isSyllabusConfigured: true,
+        path: data.syllabusPath,
+        stream: data.stream,
+        fourthSubject: data.fourthSubject,
+        religion: data.religion,
+        customSelectedChapterIds: data.customSelectedChapterIds,
+      });
+    }
   };
+
+  // Fetch syllabus config from Firebase Realtime Database
+  useEffect(() => {
+    if (currentUser?.userId) {
+      fetchSyllabusConfigFromFirebase(currentUser.userId).then((res) => {
+        if (res && res.isSyllabusConfigured !== undefined) {
+          setSyllabusConfigured(res.isSyllabusConfigured);
+          setIsSyllabusConfiguredState(res.isSyllabusConfigured);
+          if (res.customSelectedChapterIds) {
+            setUserState((prev) => ({
+              ...prev,
+              customSelectedChapterIds: res.customSelectedChapterIds,
+              isSyllabusConfigured: res.isSyllabusConfigured,
+            }));
+          }
+        }
+      }).catch((err) => console.warn('Silent fetch syllabus config error:', err));
+    }
+  }, [currentUser?.userId]);
 
   // Fetch notice from Firebase Realtime Database
   const checkNotice = async () => {
@@ -392,6 +459,18 @@ export default function StudentDashboard() {
   const allActiveSubjects: Subject[] = useMemo(() => {
     return [...compulsory, ...streamSubjects, fourthSubject, religionSubject];
   }, [compulsory, streamSubjects, fourthSubject, religionSubject]);
+
+  // Overall Algorithmic Progress Computation (Concept 33.3%, CQ 33.3%, MCQ 33.4%)
+  const overallProgressData = useMemo(() => {
+    return calculateAlgorithmicProgress(allActiveSubjects, userState.chapters, userState.customSelectedChapterIds);
+  }, [allActiveSubjects, userState.chapters, userState.customSelectedChapterIds]);
+
+  // Real-time synchronization of completion percentage to Firebase RTDB (/users/{userId}/completion_percentage.json)
+  useEffect(() => {
+    if (currentUser?.userId) {
+      syncCompletionPercentageToFirebase(currentUser.userId, overallProgressData.totalProgressPercent);
+    }
+  }, [currentUser?.userId, overallProgressData.totalProgressPercent]);
 
   const handleFourthSubjectChange = (key: FourthSubjectKey) => {
     setUserState((prev) => ({
@@ -634,11 +713,14 @@ export default function StudentDashboard() {
               </button>
 
               {/* Header Tab Quick Links */}
-              <div className="flex bg-slate-900/90 p-1 rounded-2xl border border-white/10 shadow-inner">
+              <div className="hidden xl:flex bg-slate-900/90 p-1 rounded-2xl border border-white/10 shadow-inner overflow-x-auto no-scrollbar">
                 {[
                   { id: 'profile' as NavTabKey, label: 'প্রোফাইল', icon: User },
                   { id: 'syllabus' as NavTabKey, label: 'সিলেবাস', icon: BookOpen },
                   { id: 'routine' as NavTabKey, label: 'রুটিন', icon: Calendar },
+                  { id: 'weakpoints' as NavTabKey, label: 'দুর্বল পয়েন্ট', icon: AlertTriangle },
+                  { id: 'gamification' as NavTabKey, label: 'রিওয়ার্ড', icon: Award },
+                  { id: 'analytics' as NavTabKey, label: 'এনালাইটিক্স', icon: BarChart3 },
                   { id: 'progress' as NavTabKey, label: 'প্রোগ্রেস', icon: Target },
                   { id: 'suggestions' as NavTabKey, label: 'সাজেশন', icon: Star },
                   { id: 'countdown' as NavTabKey, label: 'কাউন্টডাউন', icon: Timer },
@@ -649,7 +731,7 @@ export default function StudentDashboard() {
                     <button
                       key={tab.id}
                       onClick={() => handleTabSelect(tab.id)}
-                      className={`relative px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 z-10 ${
+                      className={`relative px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 z-10 whitespace-nowrap cursor-pointer ${
                         isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
@@ -715,6 +797,7 @@ export default function StudentDashboard() {
                   onOpenOnboardingWizard={() => setShowOnboardingWizard(true)}
                   onLogout={handleLogout}
                   currentUser={currentUser}
+                  onReconfigureSyllabus={handleReconfigureSyllabus}
                 />
               </motion.div>
             )}
@@ -769,13 +852,72 @@ export default function StudentDashboard() {
                   allActiveSubjects={allActiveSubjects}
                   chapterProgress={userState.chapters}
                   customSelectedChapterIds={userState.customSelectedChapterIds}
+                  examDate={userState.examDate || '2028-02-15'}
+                  sscBatch={userState.profile?.sscBatch || '2028'}
                   onUpdateProgressData={handleUpdateProgressData}
                   onNavigateToSyllabus={() => setActiveTab('syllabus')}
                 />
               </motion.div>
             )}
 
-            {/* 4. 🎯 প্রোগ্রেস (Progress) */}
+            {/* 4. ⚠️ দুর্বল পয়েন্ট ও টপিক ট্র্যাকার (Weak Points Tracker) */}
+            {activeTab === 'weakpoints' && (
+              <motion.div
+                key="tab-weakpoints"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25 }}
+              >
+                <WeakPointTrackerView
+                  subjects={allActiveSubjects}
+                  customSelectedChapterIds={userState.customSelectedChapterIds}
+                  onNavigateToRoutine={() => setActiveTab('routine')}
+                  onNavigateToSyllabus={() => setActiveTab('syllabus')}
+                />
+              </motion.div>
+            )}
+
+            {/* 5. 🏆 রিওয়ার্ড ও স্ট্রিক সেন্টার (Gamification) */}
+            {activeTab === 'gamification' && (
+              <motion.div
+                key="tab-gamification"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25 }}
+              >
+                <GamificationView
+                  profile={userState.profile}
+                  chapterProgress={userState.chapters}
+                  onNavigateToRoutine={() => setActiveTab('routine')}
+                  onNavigateToSyllabus={() => setActiveTab('syllabus')}
+                />
+              </motion.div>
+            )}
+
+            {/* 6. 📊 এনালাইটিক্স ও প্রগ্রেস ডায়াগনসিস (Analytics Dashboard) */}
+            {activeTab === 'analytics' && (
+              <motion.div
+                key="tab-analytics"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25 }}
+              >
+                <AnalyticsDashboardView
+                  profile={userState.profile}
+                  subjects={allActiveSubjects}
+                  chapterProgress={userState.chapters}
+                  customSelectedChapterIds={userState.customSelectedChapterIds}
+                  onNavigateToRoutine={() => setActiveTab('routine')}
+                  onNavigateToWeakPoints={() => setActiveTab('weakpoints')}
+                  onNavigateToSyllabus={() => setActiveTab('syllabus')}
+                />
+              </motion.div>
+            )}
+
+            {/* 7. 🎯 প্রোগ্রেস (Progress) */}
             {activeTab === 'progress' && (
               <motion.div
                 key="tab-progress"
@@ -834,6 +976,34 @@ export default function StudentDashboard() {
                   onUpdateExamDate={handleUpdateExamDate}
                   onOpenAdmin={() => setShowAdminPanel(true)}
                 />
+              </motion.div>
+            )}
+
+            {/* 7. 🛡️ এডমিন (Admin Panel Trigger Screen) */}
+            {activeTab === 'admin' && (
+              <motion.div
+                key="tab-admin"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25 }}
+                className="p-8 sm:p-12 rounded-3xl bg-[#151C2C] border border-white/10 text-center space-y-5 max-w-lg mx-auto shadow-2xl"
+              >
+                <div className="w-16 h-16 rounded-3xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center mx-auto shadow-inner">
+                  <Shield className="w-8 h-8" />
+                </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-xl font-bold text-white font-jakarta">এডমিন কন্ট্রোল প্যানেল</h3>
+                  <p className="text-xs text-slate-400 font-anek">
+                    সিস্টেম সিকিউরিটি, ইউজার মনিটরিং ও ইমার্জেন্সি ব্রডকাস্ট পরিচালনা করুন।
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowAdminPanel(true)}
+                  className="px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 text-white font-bold text-sm shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all font-anek cursor-pointer"
+                >
+                  মাস্টার এডমিন ড্যাশবোর্ড ওপেন করুন
+                </button>
               </motion.div>
             )}
           </AnimatePresence>
@@ -936,6 +1106,7 @@ export default function StudentDashboard() {
           initialStream={userState.stream}
           initialReligion={userState.religion}
           initialFourthSubject={userState.fourthSubject || 'hmath'}
+          initialCustomSelectedChapterIds={userState.customSelectedChapterIds}
           currentUser={currentUser}
           onComplete={handleCompleteOnboarding}
         />

@@ -25,9 +25,49 @@ export type StreamKey = 'science' | 'business' | 'humanities';
 export type ReligionKey = 'islam' | 'hindu' | 'buddhist' | 'christian';
 export type ReligionBn = 'ইসলাম' | 'হিন্দু' | 'বৌদ্ধ' | 'খ্রিস্টান';
 
-export type NavTabKey = 'profile' | 'syllabus' | 'routine' | 'progress' | 'suggestions' | 'countdown' | 'admin';
+export type NavTabKey = 'profile' | 'syllabus' | 'routine' | 'weakpoints' | 'gamification' | 'analytics' | 'progress' | 'suggestions' | 'countdown' | 'admin';
 
 export type ChapterStatus = 'not_started' | 'in_progress' | 'completed' | 'revised';
+
+export type WeakPointStatus = 'struggling' | 'needs_revision' | 'mastered';
+
+export interface ChapterWeakPointData {
+  chapterId: string;
+  topicChecklist: Record<string, WeakPointStatus>; // topicId -> status
+  customWeakPoints: { id: string; text: string; createdAt: string; isResolved?: boolean }[];
+  personalNotes?: string;
+  updatedAt?: string;
+}
+
+export interface AchievementBadge {
+  id: string;
+  title: string;
+  titleEn: string;
+  description: string;
+  icon: string;
+  category: 'mastery' | 'streak' | 'time' | 'special';
+  xpReward: number;
+  isUnlocked: boolean;
+  unlockedAt?: string;
+  currentValue: number;
+  targetValue: number;
+  rarity: 'Common' | 'Rare' | 'Epic' | 'Legendary';
+}
+
+export interface LeaderboardStudent {
+  rank: number;
+  name: string;
+  school: string;
+  xp: number;
+  streak: number;
+  avatar: string;
+  batch: string;
+  group: string;
+  isCurrentUser?: boolean;
+  level: number;
+  badgeTitle: string;
+  completedChapters: number;
+}
 
 export interface ChapterProgressData {
   status: ChapterStatus;
@@ -76,6 +116,7 @@ export interface UserProgressState {
   fourthSubject?: FourthSubjectKey;
   syllabusPath?: 'standard' | 'custom';
   hasCompletedOnboarding?: boolean;
+  isSyllabusConfigured?: boolean;
   customSelectedChapterIds?: string[]; // chapterIds included in custom syllabus filter
   chapters: Record<string, ChapterProgressData>; // chapterId -> data
   suggestions: Record<string, boolean>; // `${subjectId}_${suggestionIndex}` -> mastered
@@ -134,6 +175,7 @@ export interface FirebaseUserData {
   onboarding_completed?: boolean;
   security_info?: DeviceSecurityInfo;
   is_banned?: boolean;
+  completion_percentage?: number;
 }
 
 export interface AuthSession {

@@ -6,7 +6,7 @@ import {
   X, Check, Lock, Unlock, Server, BookOpen, Activity, 
   Database, UserCheck, AlertOctagon, Terminal, Users,
   Search, Filter, Calendar, Clock, Flame, Mail, Award,
-  Sparkles, ExternalLink, Globe, Ban, Smartphone, Laptop
+  Sparkles, ExternalLink, Globe, Ban, Smartphone, Laptop, Target
 } from 'lucide-react';
 import { 
   Subject, StreamKey, UserProfile, ChapterProgressData, 
@@ -338,7 +338,7 @@ export const SystemAdminPanel: React.FC<SystemAdminPanelProps> = ({
       }
       loadUsersFromFirebase();
     } else {
-      setAuthError('ভুল পাসকোড! সঠিক মাস্টার পাসওয়ার্ড দিন।');
+      setAuthError('ভুল পাসওয়ার্ড! আবার চেষ্টা করুন।');
     }
   };
 
@@ -931,6 +931,19 @@ export const SystemAdminPanel: React.FC<SystemAdminPanelProps> = ({
 
                             {/* Right: Metrics & Badges */}
                             <div className="flex items-center gap-3 sm:gap-4 flex-wrap sm:flex-nowrap border-t sm:border-t-0 border-white/5 pt-2 sm:pt-0">
+                              {/* Syllabus Completion Percentage */}
+                              <div className="bg-slate-900/80 px-3 py-1.5 rounded-xl border border-white/5 text-right shrink-0">
+                                <span className="text-[10px] text-slate-400 block font-anek">
+                                  সিলেবাস সম্পন্ন
+                                </span>
+                                <span className="text-xs font-bold text-emerald-400 font-mono flex items-center gap-1 justify-end">
+                                  <Target className="w-3 h-3 text-emerald-400" />
+                                  {typeof user.completion_percentage === 'number'
+                                    ? `${user.completion_percentage.toFixed(1)}%`
+                                    : `${Number(user.completion_percentage || 0).toFixed(1)}%`}
+                                </span>
+                              </div>
+
                               {/* Total Study Time */}
                               <div className="bg-slate-900/80 px-3 py-1.5 rounded-xl border border-white/5 text-right shrink-0">
                                 <span className="text-[10px] text-slate-400 block font-anek">

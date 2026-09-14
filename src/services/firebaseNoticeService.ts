@@ -1,6 +1,7 @@
 import { GlobalNoticeData } from '../types';
+import { RTDB_BASE_URL } from './firebaseConfig';
 
-export const RTDB_BASE_URL = 'https://toppers-progresss-default-rtdb.firebaseio.com';
+export { RTDB_BASE_URL };
 export const NOTICE_ENDPOINT = `${RTDB_BASE_URL}/global_notice.json`;
 export const MASTER_ADMIN_PASSCODE = '1919131514';
 export const STORAGE_KEY_NOTICE = 'ssc_last_known_global_notice_v1';

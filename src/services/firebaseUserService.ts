@@ -1,12 +1,15 @@
 import { FirebaseUserData, ChapterProgressData } from '../types';
-import { RTDB_BASE_URL } from './firebaseNoticeService';
+import { RTDB_BASE_URL, firebaseConfig } from './firebaseConfig';
 import { toBengaliNumber } from '../utils/progressCalculator';
 import { getDeviceSecurityInfo } from './deviceSecurityService';
+
+export { RTDB_BASE_URL, firebaseConfig };
 
 export const RTDB_USERS_ENDPOINT = `${RTDB_BASE_URL}/users.json`;
 export const STORAGE_KEY_AUTH_USER = 'ssc_auth_active_user_v1';
 export const STORAGE_KEY_AUTH_TOKEN = 'ssc_auth_session_token_v1';
 export const STORAGE_KEY_ONBOARDING_DONE = 'ssc_onboarding_completed_v1';
+export const STORAGE_KEY_SYLLABUS_CONFIGURED = 'ssc_syllabus_configured_v1';
 
 /**
  * Sanitize email or ID to be a safe Firebase Realtime Database node key
@@ -80,6 +83,111 @@ export function setOnboardingCompleted(completed: boolean): void {
 }
 
 /**
+ * Check if syllabus configuration has been initialized/saved
+ */
+export function isSyllabusConfiguredCheck(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY_SYLLABUS_CONFIGURED) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Set syllabus configuration completed state
+ */
+export function setSyllabusConfigured(configured: boolean): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_SYLLABUS_CONFIGURED, configured ? 'true' : 'false');
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Sync syllabus configuration to Firebase Realtime Database at /users/{userId}/syllabus_config.json
+ */
+export async function syncSyllabusConfigToFirebase(
+  userId: string,
+  config: {
+    isSyllabusConfigured: boolean;
+    path?: 'standard' | 'custom' | string;
+    stream?: string;
+    fourthSubject?: string;
+    religion?: string;
+    customSelectedChapterIds?: string[];
+    updatedAt?: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!userId) return { success: false, error: 'No user ID provided' };
+    const safeId = sanitizeUserId(userId);
+    const endpoint = `${RTDB_BASE_URL}/users/${safeId}/syllabus_config.json`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    const response = await fetch(endpoint, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        ...config,
+        updatedAt: config.updatedAt || new Date().toISOString(),
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Firebase syllabus config write failed: ${response.status}`);
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.warn('Firebase syllabus config sync notice:', err);
+    return { success: false, error: err?.message };
+  }
+}
+
+/**
+ * Fetch syllabus configuration from Firebase Realtime Database at /users/{userId}/syllabus_config.json
+ */
+export async function fetchSyllabusConfigFromFirebase(
+  userId: string
+): Promise<{
+  isSyllabusConfigured: boolean;
+  path?: string;
+  customSelectedChapterIds?: string[];
+} | null> {
+  try {
+    if (!userId) return null;
+    const safeId = sanitizeUserId(userId);
+    const endpoint = `${RTDB_BASE_URL}/users/${safeId}/syllabus_config.json`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Calculate total study minutes completed based on chapter progress
  */
 export function calculateStudyMinutes(
@@ -144,6 +252,7 @@ export async function syncUserToFirebase(
       onboarding_completed: userData.onboarding_completed !== undefined ? userData.onboarding_completed : true,
       security_info,
       is_banned: userData.is_banned || false,
+      completion_percentage: userData.completion_percentage !== undefined ? userData.completion_percentage : 0,
     };
 
     const controller = new AbortController();
@@ -252,6 +361,7 @@ export async function fetchAllUsersFromFirebase(): Promise<{
         onboarding_completed: val.onboarding_completed !== false,
         security_info,
         is_banned: !!val.is_banned,
+        completion_percentage: typeof val.completion_percentage === 'number' ? val.completion_percentage : Number(val.completion_percentage) || 0,
       };
     });
 
@@ -266,6 +376,29 @@ export async function fetchAllUsersFromFirebase(): Promise<{
       isLive: false,
       error: err?.message || 'অফলাইন ডেটা ব্যবহার করা হচ্ছে',
     };
+  }
+}
+
+/**
+ * 3. Dedicated sync for overall completion percentage to Firebase
+ * Endpoint: /users/{userId}/completion_percentage.json
+ */
+export async function syncCompletionPercentageToFirebase(
+  userId: string,
+  percentage: number
+): Promise<void> {
+  try {
+    const targetUrl = `${RTDB_BASE_URL}/users/${userId}/completion_percentage.json`;
+    await fetch(targetUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(percentage),
+    });
+  } catch (e) {
+    console.warn('Silent completion percentage sync note:', e);
   }
 }
 
@@ -309,6 +442,7 @@ function getFallbackUsers(): FirebaseUserData[] {
       created_at: '2026-09-01T08:30:00.000Z',
       total_study_minutes: 1980, // 33 hours
       streak_count: 15,
+      completion_percentage: 64.5,
       last_login: new Date().toISOString(),
       security_info: {
         deviceID: 'DEV-1080x2400-SMN99-K3A1',
@@ -326,6 +460,7 @@ function getFallbackUsers(): FirebaseUserData[] {
       created_at: '2026-09-03T11:15:00.000Z',
       total_study_minutes: 2450,
       streak_count: 18,
+      completion_percentage: 88.2,
       last_login: new Date(Date.now() - 3600000 * 2).toISOString(),
       security_info: {
         deviceID: 'DEV-1440x3200-AYSH2-P8B2',
@@ -343,6 +478,7 @@ function getFallbackUsers(): FirebaseUserData[] {
       created_at: '2026-09-05T14:45:00.000Z',
       total_study_minutes: 1320,
       streak_count: 11,
+      completion_percentage: 42.0,
       last_login: new Date(Date.now() - 3600000 * 18).toISOString(),
       security_info: {
         deviceID: 'DEV-1080x1920-FRHN4-M4C3',
@@ -360,6 +496,7 @@ function getFallbackUsers(): FirebaseUserData[] {
       created_at: '2026-09-08T09:20:00.000Z',
       total_study_minutes: 1640,
       streak_count: 9,
+      completion_percentage: 51.7,
       last_login: new Date(Date.now() - 3600000 * 5).toISOString(),
       security_info: {
         deviceID: 'DEV-1080x2340-SMYA7-X9D4',
@@ -377,6 +514,7 @@ function getFallbackUsers(): FirebaseUserData[] {
       created_at: '2026-09-10T16:00:00.000Z',
       total_study_minutes: 890,
       streak_count: 6,
+      completion_percentage: 28.4,
       last_login: new Date(Date.now() - 3600000 * 28).toISOString(),
       security_info: {
         deviceID: 'DEV-1080x2400-RFD12-Z2E5',

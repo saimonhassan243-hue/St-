@@ -5,7 +5,7 @@ import {
   Sparkles, Upload, Edit3, Check, X, ShieldCheck,
   Camera, Award, CheckCircle2, Bookmark, Flame, ArrowRight,
   RefreshCw, CheckCircle, Info, GraduationCap, BookOpen,
-  Compass, LogOut
+  Compass, LogOut, RotateCcw, AlertTriangle, Layers
 } from 'lucide-react';
 import { UserProfile, ReligionBn, FirebaseUserData } from '../types';
 
@@ -57,6 +57,7 @@ interface ModernStudentProfileProps {
   onOpenOnboardingWizard?: () => void;
   onLogout?: () => void;
   currentUser?: FirebaseUserData | null;
+  onReconfigureSyllabus?: () => void;
 }
 
 export const ModernStudentProfile: React.FC<ModernStudentProfileProps> = ({
@@ -68,10 +69,12 @@ export const ModernStudentProfile: React.FC<ModernStudentProfileProps> = ({
   onOpenOnboardingWizard,
   onLogout,
   currentUser,
+  onReconfigureSyllabus,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<UserProfile>(profile);
   const [showSavedToast, setShowSavedToast] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -457,14 +460,14 @@ export const ModernStudentProfile: React.FC<ModernStudentProfileProps> = ({
               </div>
             </div>
 
-            {/* Action buttons (Navigation shortcuts) */}
+            {/* Action buttons (Navigation shortcuts) & Syllabus Reconfig */}
             <div className="mt-6 flex flex-wrap gap-2.5 justify-center lg:justify-start">
               {onGoToSubjects && (
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={onGoToSubjects}
-                  className="px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition-colors"
+                  className="px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   সিলেবাস ও অধ্যায় দেখুন <ArrowRight className="w-3.5 h-3.5 text-indigo-400" />
                 </motion.button>
@@ -474,14 +477,100 @@ export const ModernStudentProfile: React.FC<ModernStudentProfileProps> = ({
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={onGoToProgress}
-                  className="px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition-colors"
+                  className="px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   পড়াশোনার অগ্রগতি রিপোর্ট <ArrowRight className="w-3.5 h-3.5 text-cyan-400" />
+                </motion.button>
+              )}
+              {onReconfigureSyllabus && (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowConfirmModal(true)}
+                  className="px-4 py-2 rounded-2xl bg-gradient-to-r from-rose-500/20 to-amber-500/20 hover:from-rose-500/30 hover:to-amber-500/30 border border-rose-500/40 text-xs font-bold text-rose-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
+                  সিলেবাস পরিবর্তন / পুনঃরাই সেটিং
                 </motion.button>
               )}
             </div>
           </div>
         </div>
+
+        {/* Dedicated Syllabus Reconfiguration Dashboard Banner */}
+        <div className="mt-8 p-5 rounded-3xl bg-gradient-to-r from-slate-900/90 via-[#151C2C] to-slate-900/90 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0 shadow-inner">
+              <BookOpen className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  {currentUser?.syllabus_path || 'বোর্ড স্ট্যান্ডার্ড SSC 2028'}
+                </span>
+                <span className="text-xs text-slate-400 font-medium">
+                  ({profile.group})
+                </span>
+              </div>
+              <h4 className="text-sm sm:text-base font-bold text-white mt-1">
+                সিলেবাস ও বিষয় কনফিগারেশন
+              </h4>
+              <p className="text-xs text-slate-400 mt-0.5">
+                বোর্ড স্ট্যান্ডার্ড বা কাস্টমাইজড স্টেপ-বাই-স্টেপ সিলেবাস মোড পুনরায় পরিবর্তন করতে পারবেন।
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowConfirmModal(true)}
+            className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-rose-500 via-rose-600 to-amber-600 hover:from-rose-400 hover:to-amber-500 text-white font-bold text-xs shadow-lg shadow-rose-500/25 flex items-center justify-center gap-2 transition-all shrink-0 cursor-pointer"
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span>সিলেবাস পরিবর্তন / পুনঃরাই সেটিং</span>
+          </button>
+        </div>
+
+        {/* Confirmation Modal for Reconfiguring Syllabus */}
+        {showConfirmModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <div className="bg-[#151C2C] border border-white/15 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 text-white">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto shadow-inner">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+
+              <div className="text-center space-y-2">
+                <h3 className="text-lg font-bold text-white font-jakarta">
+                  আপনি কি সিলেবাস আবার নতুন করে সাজাতে চান?
+                </h3>
+                <p className="text-xs text-slate-300 font-anek leading-relaxed">
+                  সিলেবাস রিসেট করলে আপনি আবার <strong className="text-emerald-400">"বোর্ড স্ট্যান্ডার্ড"</strong> অথবা <strong className="text-cyan-400">"কাস্টমাইজড"</strong> সিলেবাস উইজার্ডের মাধ্যমে আপনার গ্রুপ, ৪র্থ বিষয় ও অধ্যায় চেকলিস্ট নতুন করে সেটআপ করতে পারবেন।
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmModal(false)}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  বাতিল
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowConfirmModal(false);
+                    if (onReconfigureSyllabus) onReconfigureSyllabus();
+                  }}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-xs shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>হ্যাঁ, নতুন করে সাজাব</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Dynamic Edit Form Panel (Animated with AnimatePresence) */}
         <AnimatePresence>

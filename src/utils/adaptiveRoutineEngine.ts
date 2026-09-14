@@ -52,6 +52,21 @@ export interface AdaptiveTargetChapter {
   reasonBn: string;
 }
 
+export interface BoardRankAccelerationMetrics {
+  targetRankLabel: string; // 'Board Top Rank #1 (Roll 1 Standard)'
+  paceStatus: 'top_rank_optimal' | 'crunch_acceleration' | 'hyper_velocity' | 'steady_pace';
+  paceStatusBn: string;
+  recommendedStudyHours: number;
+  backlogChapterCount: number;
+  totalChaptersInScope: number;
+  daysRemainingToExam: number;
+  requiredDailyChapterVelocity: number; // e.g. 0.35 chapters/day
+  accelerationReasonBn: string;
+  leisureBufferDeductionMins: number;
+  sleepBufferHours: number;
+  isCrunchActive: boolean;
+}
+
 export interface AdaptiveScheduleResult {
   currentDateStr: string;
   buffers: FixedTimeBuffers;
@@ -62,7 +77,81 @@ export interface AdaptiveScheduleResult {
   estimatedDaysToCompleteSyllabus: number;
   dailyStudyHoursAllocated: number;
   recalculationTimestamp: string;
+  boardRankMetrics: BoardRankAccelerationMetrics;
 }
+
+/**
+ * 0. BOARD RANK #1 DYNAMIC ACCELERATION CALCULATOR
+ * Analyzes exam target date and unfinished backlog to dynamically scale
+ * study targets and trim leisure buffers for Roll #1 pace.
+ */
+export const calculateBoardRankAcceleration = (
+  examDateStr: string = '2028-02-15',
+  unfinishedChaptersCount: number = 0,
+  totalChaptersCount: number = 0
+): BoardRankAccelerationMetrics => {
+  const targetTime = new Date(examDateStr).getTime();
+  const now = Date.now();
+  const diffDays = Math.max(1, Math.floor((targetTime - now) / (1000 * 60 * 60 * 24)));
+
+  // Velocity needed (Chapters per day to finish 100% with 2 rounds of revision)
+  // Roll 1 standard requires syllabus completion + 30 days final revision buffer
+  const effectiveExamDays = Math.max(15, diffDays - 30);
+  const totalChaptersToRevise = unfinishedChaptersCount > 0 ? unfinishedChaptersCount : Math.max(1, totalChaptersCount);
+  const velocity = Math.round((totalChaptersToRevise / effectiveExamDays) * 100) / 100;
+
+  let recommendedHours = 8.0;
+  let paceStatus: BoardRankAccelerationMetrics['paceStatus'] = 'top_rank_optimal';
+  let paceStatusBn = 'বোর্ড টপ র‍্যাংক #১ স্ট্যান্ডার্ড পেস';
+  let accelerationReasonBn = 'প্রতিদিন ৩-৪টি বিষয়ের কনসেপ্ট, CQ ও MCQ গভীর বিশ্লেষণের মাধ্যমে রোল ১ স্ট্যান্ডার্ড বজায় রাখা হচ্ছে।';
+  let leisureDeductionMins = 0;
+  let sleepBuffer = 7.5;
+  let isCrunchActive = false;
+
+  if (diffDays <= 60 || (unfinishedChaptersCount > 25 && diffDays <= 120)) {
+    // Hyper Velocity / Crunch Mode
+    recommendedHours = 10.5;
+    paceStatus = 'hyper_velocity';
+    paceStatusBn = 'হাইপার অ্যাক্সিলারেশন (বোর্ড গোল্ড মেডেল পেস)';
+    accelerationReasonBn = `পরীক্ষার বাকি মাত্র ${toBengaliNumber(diffDays)} দিন এবং ${toBengaliNumber(unfinishedChaptersCount)}টি অধ্যায় বাকি। বিনোদন বাফার কমিয়ে সর্বোচ্চ ১০.৫ ঘণ্টা স্টাডি স্লট অটো-অ্যালোকেট করা হয়েছে।`;
+    leisureDeductionMins = 60;
+    sleepBuffer = 6.8;
+    isCrunchActive = true;
+  } else if (diffDays <= 120 || unfinishedChaptersCount > 35) {
+    // High Crunch Acceleration
+    recommendedHours = 9.0;
+    paceStatus = 'crunch_acceleration';
+    paceStatusBn = 'ক্রাঞ্চ মোড অ্যাক্সিলারেশন (রোল ১ টার্গেট)';
+    accelerationReasonBn = `সিলেবাসের গতি বাড়াতে ও ব্যাকলগ ক্লিয়ার করতে দৈনিক ৯.০ ঘণ্টা নিবিড় প্রস্তুতি শিডিউল করা হয়েছে।`;
+    leisureDeductionMins = 30;
+    sleepBuffer = 7.0;
+    isCrunchActive = true;
+  } else {
+    // Optimal Roll 1 Standard
+    recommendedHours = 8.0;
+    paceStatus = 'top_rank_optimal';
+    paceStatusBn = 'বোর্ড টপ র‍্যাংক #১ স্ট্যান্ডার্ড পেস';
+    accelerationReasonBn = 'নিয়মিত ধারাবাহিকতায় সর্বোচ্চ ৪টি বিষয় রোটেশনের মাধ্যমে শীর্ষ মেধা তালিকায় অবস্থানের প্রস্তুতি।';
+    leisureDeductionMins = 0;
+    sleepBuffer = 7.5;
+    isCrunchActive = false;
+  }
+
+  return {
+    targetRankLabel: 'Board Top Rank #1 (Roll 1 Standard)',
+    paceStatus,
+    paceStatusBn,
+    recommendedStudyHours: recommendedHours,
+    backlogChapterCount: unfinishedChaptersCount,
+    totalChaptersInScope: totalChaptersCount,
+    daysRemainingToExam: diffDays,
+    requiredDailyChapterVelocity: velocity,
+    accelerationReasonBn,
+    leisureBufferDeductionMins: leisureDeductionMins,
+    sleepBufferHours: sleepBuffer,
+    isCrunchActive,
+  };
+};
 
 /**
  * 1. DYNAMIC TIME BUFFERING & COMPLEXITY CLASSIFICATION
@@ -279,7 +368,8 @@ export const runAdaptiveRoutineEngine = (
   chapterProgress: Record<string, ChapterProgressData>,
   customSelectedChapterIds?: string[],
   completedTodayChapterIds: string[] = [],
-  customBuffers?: Partial<FixedTimeBuffers>
+  customBuffers?: Partial<FixedTimeBuffers>,
+  examDateStr: string = '2028-02-15'
 ): AdaptiveScheduleResult => {
   const buffers = calculateDynamicTimeBuffers(customBuffers);
   const { currentTarget, nextQueued, unfinishedCount } = findAdaptiveTargetChapters(
@@ -292,6 +382,7 @@ export const runAdaptiveRoutineEngine = (
   // Calculate daily hours available for study
   const dailyStudyHoursAllocated = buffers.netAvailableStudyHours;
 
+  let totalChaptersInScope = 0;
   // Estimate total hours needed for all unfinished chapters
   let totalHoursNeeded = 0;
   subjects.forEach((s) => {
@@ -304,6 +395,7 @@ export const runAdaptiveRoutineEngine = (
       ) {
         return;
       }
+      totalChaptersInScope += 1;
       const st = getChapterTaskStatus(chapterProgress[c.id]);
       if (!st.isFullyDone) {
         const remainingFraction = Math.max(0.2, (100 - st.percentage) / 100);
@@ -315,6 +407,12 @@ export const runAdaptiveRoutineEngine = (
   const estimatedDaysToCompleteSyllabus = dailyStudyHoursAllocated > 0
     ? Math.max(1, Math.ceil(totalHoursNeeded / dailyStudyHoursAllocated))
     : 120;
+
+  const boardRankMetrics = calculateBoardRankAcceleration(
+    examDateStr,
+    unfinishedCount,
+    totalChaptersInScope
+  );
 
   return {
     currentDateStr: new Date().toLocaleDateString('bn-BD', {
@@ -331,5 +429,6 @@ export const runAdaptiveRoutineEngine = (
     estimatedDaysToCompleteSyllabus,
     dailyStudyHoursAllocated,
     recalculationTimestamp: new Date().toLocaleTimeString('bn-BD'),
+    boardRankMetrics,
   };
 };

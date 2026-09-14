@@ -20,6 +20,7 @@ import {
 import { toBengaliNumber, formatBengaliProgress } from '../utils/progressCalculator';
 import { runAdaptiveRoutineEngine } from '../utils/adaptiveRoutineEngine';
 import { AutoAdaptiveTargetCard } from './AutoAdaptiveTargetCard';
+import { DailyStudyHoursTracker } from './DailyStudyHoursTracker';
 
 interface RoutineViewProps {
   profile: UserProfile;
@@ -29,6 +30,8 @@ interface RoutineViewProps {
   allActiveSubjects?: Subject[];
   chapterProgress?: Record<string, ChapterProgressData>;
   customSelectedChapterIds?: string[];
+  examDate?: string;
+  sscBatch?: string;
   onUpdateProgressData?: (chapterId: string, updated: Partial<ChapterProgressData>) => void;
   onNavigateToSyllabus?: (subjectId: string, chapterId: string) => void;
 }
@@ -47,6 +50,7 @@ const DEFAULT_INPUTS: ScheduleInputs = {
 
 const STORAGE_KEY_INPUTS = 'ssc_routine_builder_inputs_v1';
 const STORAGE_KEY_CHECKED = 'ssc_routine_builder_checked_v1';
+const STORAGE_KEY_EXTRA_MINS = 'ssc_routine_extra_study_minutes_v1';
 
 export const RoutineView: React.FC<RoutineViewProps> = ({
   profile,
@@ -56,6 +60,8 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   allActiveSubjects = [],
   chapterProgress = {},
   customSelectedChapterIds,
+  examDate = '2028-02-15',
+  sscBatch = '2028',
   onUpdateProgressData,
   onNavigateToSyllabus,
 }) => {
@@ -80,6 +86,25 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     }
     return {};
   });
+
+  // 3. Extra self-study minutes manually logged
+  const [manualExtraMinutes, setManualExtraMinutes] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_EXTRA_MINS);
+      if (saved) return Number(saved) || 0;
+    } catch {
+      // fallback
+    }
+    return 0;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_EXTRA_MINS, String(manualExtraMinutes));
+    } catch {
+      // ignore
+    }
+  }, [manualExtraMinutes]);
 
   // UI state
   const [showConfigDrawer, setShowConfigDrawer] = useState(false);
@@ -137,9 +162,12 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     return runAdaptiveRoutineEngine(
       subjectsToUse,
       chapterProgress,
-      customSelectedChapterIds
+      customSelectedChapterIds,
+      [],
+      undefined,
+      examDate
     );
-  }, [subjectsToUse, chapterProgress, customSelectedChapterIds]);
+  }, [subjectsToUse, chapterProgress, customSelectedChapterIds, examDate]);
 
   // Auto-Allocate Routine Blocks aligned with Adaptive Target Chapter
   const automatedStudySlots = useMemo(() => {
@@ -183,6 +211,29 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       targetStudyHours: hours,
     }));
   };
+
+  // Extra manual study minutes handlers
+  const handleAddManualMinutes = (mins: number) => {
+    setManualExtraMinutes((prev) => prev + mins);
+  };
+
+  const handleResetManualMinutes = () => {
+    setManualExtraMinutes(0);
+  };
+
+  // Compute completed study hours directly from ticked routine slots
+  const completedStudyMinutes = useMemo(() => {
+    return allStudySlots.reduce((acc, slot) => {
+      if (completedTasksMap[slot.id]) {
+        return acc + (slot.durationMinutes || 0);
+      }
+      return acc;
+    }, 0);
+  }, [allStudySlots, completedTasksMap]);
+
+  const completedStudyHours = useMemo(() => {
+    return Math.round((completedStudyMinutes / 60) * 10) / 10;
+  }, [completedStudyMinutes]);
 
   // Add custom slot
   const handleAddCustom = (e: React.FormEvent) => {
@@ -589,6 +640,22 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* ============================================================== */}
+        {/* 2.2 DAILY STUDY HOURS PROGRESS TRACKER (BOARD RANK #1 TARGET)  */}
+        {/* ============================================================== */}
+        <div className="mt-6">
+          <DailyStudyHoursTracker
+            targetStudyHours={scheduleInputs.targetStudyHours}
+            completedStudyHours={completedStudyHours}
+            manualExtraMinutes={manualExtraMinutes}
+            onAddManualMinutes={handleAddManualMinutes}
+            onResetManualMinutes={handleResetManualMinutes}
+            boardRankMetrics={adaptiveEngineResult.boardRankMetrics}
+            completedTasksCount={completedStudyBlocks}
+            totalTasksCount={totalStudyBlocks}
+          />
+        </div>
 
         {/* ============================================================== */}
         {/* 2.5 REAL-TIME AUTO-ADAPTIVE TARGET CARD (TODAY'S ADAPTIVE CHAPTER) */}
