@@ -12,7 +12,9 @@ import {
   Award,
   BarChart3,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Zap,
+  Moon
 } from 'lucide-react';
 import { NavTabKey } from '../types';
 
@@ -30,6 +32,8 @@ const NAV_OPTIONS: NavOption[] = [
   { id: 'profile', label: 'প্রোফাইল', shortLabel: 'প্রোফাইল', icon: User, accent: 'from-indigo-500 to-indigo-600' },
   { id: 'syllabus', label: 'সিলেবাস', shortLabel: 'সিলেবাস', icon: BookOpen, accent: 'from-blue-500 to-indigo-600' },
   { id: 'routine', label: 'রুটিন', shortLabel: 'রুটিন', icon: Calendar, accent: 'from-cyan-500 to-blue-600' },
+  { id: 'practice', label: 'AI প্র্যাকটিস ও CQ', shortLabel: 'AI টেস্ট', icon: Zap, accent: 'from-purple-500 to-indigo-600', isNew: true, badge: 'AI' },
+  { id: 'eve_mode', label: 'পরীক্ষার আগের রাত', shortLabel: 'এক্সাম নাইট', icon: Moon, accent: 'from-amber-400 to-orange-500', isNew: true, badge: 'HOT' },
   { id: 'weakpoints', label: 'দুর্বল পয়েন্ট', shortLabel: 'দুর্বল পয়েন্ট', icon: AlertTriangle, accent: 'from-rose-500 to-amber-600', isNew: true },
   { id: 'gamification', label: 'রিওয়ার্ড ও স্ট্রিক', shortLabel: 'রিওয়ার্ড', icon: Award, accent: 'from-amber-400 to-orange-500', isNew: true },
   { id: 'analytics', label: 'এনালাইটিক্স', shortLabel: 'এনালাইটিক্স', icon: BarChart3, accent: 'from-emerald-500 to-cyan-600', isNew: true },

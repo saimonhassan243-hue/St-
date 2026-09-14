@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   AlertTriangle, ShieldAlert, WifiOff, KeyRound, 
   Lock, Unlock, RefreshCw, Radio, CheckCircle2, 
-  X, AlertOctagon, Terminal
+  X, AlertOctagon, Terminal, Smartphone, DatabaseZap
 } from 'lucide-react';
+import { App as CapacitorApp } from '@capacitor/app';
 import { GlobalNoticeData } from '../types';
 import { MASTER_ADMIN_PASSCODE } from '../services/firebaseNoticeService';
 
@@ -32,6 +33,45 @@ export const EmergencyBroadcastLockOverlay: React.FC<EmergencyBroadcastLockOverl
   const [passcodeError, setPasscodeError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionSuccessMessage, setActionSuccessMessage] = useState('');
+
+  // 1. Android Hardware Back Button Protection (Capacitor Native)
+  useEffect(() => {
+    let handler: any = null;
+    try {
+      CapacitorApp.addListener('backButton', () => {
+        // Prevent back button from escaping the lock overlay
+        console.warn('Hardware back pressed during Emergency Lock - blocked');
+      }).then((h) => {
+        handler = h;
+      });
+    } catch {
+      // Not in Capacitor environment
+    }
+
+    // 2. Web Browser History Trap (Prevents browser back/swipe navigation)
+    const trapHistory = () => {
+      window.history.pushState(null, '', window.location.href);
+    };
+    trapHistory();
+    window.addEventListener('popstate', trapHistory);
+
+    // 3. Block ESC key
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      if (handler && typeof handler.remove === 'function') {
+        handler.remove();
+      }
+      window.removeEventListener('popstate', trapHistory);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   const handleVerifyPasscode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,7 +136,10 @@ export const EmergencyBroadcastLockOverlay: React.FC<EmergencyBroadcastLockOverl
       };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-slate-950/95 backdrop-blur-2xl text-slate-100 font-hind select-none">
+    <div 
+      id="emergency-broadcast-lock-overlay"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-slate-950/95 backdrop-blur-2xl text-slate-100 font-hind select-none overflow-y-auto"
+    >
       {/* Background glowing ambient pulses */}
       <div className={`absolute -top-20 -right-20 w-96 h-96 ${themeColors.glow} rounded-full blur-3xl pointer-events-none`} />
       <div className="absolute -bottom-20 -left-20 w-96 h-96 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none" />
@@ -106,26 +149,34 @@ export const EmergencyBroadcastLockOverlay: React.FC<EmergencyBroadcastLockOverl
         initial={{ opacity: 0, scale: 0.92, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.35, ease: 'easeOut' }}
-        className={`relative w-full max-w-xl rounded-3xl bg-slate-900/90 border ${themeColors.border} backdrop-blur-3xl shadow-2xl p-6 sm:p-9 overflow-hidden`}
+        className={`relative w-full max-w-xl rounded-3xl bg-slate-900/95 border ${themeColors.border} backdrop-blur-3xl shadow-2xl p-6 sm:p-8 overflow-hidden my-auto`}
       >
         {/* Glowing top line */}
         <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-rose-500 to-transparent`} />
 
         {/* Offline Security Alert Banner (if offline lock) */}
         {(isOffline || isOfflineLockActive) && (
-          <div className="mb-5 p-3 rounded-2xl bg-amber-950/40 border border-amber-500/30 flex items-center justify-between gap-3 text-xs text-amber-200">
-            <div className="flex items-center gap-2">
-              <WifiOff className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>
-                <strong>অফলাইন সিকিউরিটি লক:</strong> ডিভাইস অফলাইনে রয়েছে বা নেটওয়ার্ক সংযোগ বিচ্ছিন্ন।
-              </span>
+          <div className="mb-4 p-3.5 rounded-2xl bg-amber-950/60 border border-amber-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-200">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+                <WifiOff className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <p className="font-bold text-white flex items-center gap-1.5 font-jakarta text-xs">
+                  <span>অফলাইন ক্যাশ নিরাপত্তা মোড সক্রিয়</span>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/30 text-amber-300 font-mono">LOCKED</span>
+                </p>
+                <p className="text-[11px] text-amber-300/90 font-anek">
+                  ইন্টারনেট বন্ধ থাকলেও পূর্বে সেভ হওয়া অ্যাডমিন লক কার্যকর রয়েছে। অ্যাপটি চালু করতে অনলাইন সংযোগ অথবা মাস্টার পাসকোড প্রয়োজন।
+                </p>
+              </div>
             </div>
             <button
               onClick={onRetryConnection}
-              className="px-2.5 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold flex items-center gap-1 transition-all shrink-0 cursor-pointer"
+              className="w-full sm:w-auto px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold flex items-center justify-center gap-1.5 transition-all shrink-0 cursor-pointer border border-amber-500/30 font-anek text-xs"
             >
-              <RefreshCw className="w-3 h-3" />
-              <span>পুনরায় চেষ্টা</span>
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>পুনরায় যাচাই</span>
             </button>
           </div>
         )}
@@ -135,7 +186,7 @@ export const EmergencyBroadcastLockOverlay: React.FC<EmergencyBroadcastLockOverl
           <div className="relative mb-4">
             <div className="w-20 h-20 rounded-3xl bg-slate-800/90 border border-white/10 flex items-center justify-center shadow-inner">
               {isOfflineLockActive ? (
-                <WifiOff className="w-10 h-10 text-amber-400" />
+                <Lock className="w-10 h-10 text-rose-400 animate-pulse" />
               ) : (
                 themeColors.icon
               )}
@@ -150,7 +201,7 @@ export const EmergencyBroadcastLockOverlay: React.FC<EmergencyBroadcastLockOverl
 
           <div className="flex items-center gap-2 mb-2">
             <span className={`text-[11px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider font-jakarta border ${themeColors.badgeBg}`}>
-              {isOfflineLockActive ? 'OFFLINE SECURITY LOCK' : 'GLOBAL EMERGENCY BROADCAST LOCK'}
+              {isOfflineLockActive ? 'OFFLINE CACHED SECURITY LOCK' : 'GLOBAL EMERGENCY BROADCAST LOCK'}
             </span>
           </div>
 
@@ -173,15 +224,27 @@ export const EmergencyBroadcastLockOverlay: React.FC<EmergencyBroadcastLockOverl
             )}
           </div>
 
+          {/* Security Features Info Pills */}
+          <div className="mt-4 flex items-center justify-center gap-2 flex-wrap text-[11px] text-slate-400 font-anek">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-800/80 border border-white/5">
+              <Smartphone className="w-3 h-3 text-indigo-400" />
+              <span>ব্যাক বাটন লক প্রটেকশন</span>
+            </span>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-800/80 border border-white/5">
+              <DatabaseZap className="w-3 h-3 text-emerald-400" />
+              <span>অফলাইন ক্যাশ ট্র্যাপ সক্রিয়</span>
+            </span>
+          </div>
+
           {/* Action Buttons */}
-          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 w-full">
+          <div className="mt-5 flex flex-col sm:flex-row items-center justify-center gap-3 w-full font-anek">
             {/* Admin Bypass Button */}
             <button
               onClick={() => setShowPasscodeModal(true)}
-              className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 text-white text-xs font-bold border border-white/10 shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
+              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-gradient-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 text-white text-xs font-bold border border-white/10 shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <KeyRound className="w-4 h-4 text-amber-400" />
-              <span>অ্যাডমিন বাইপাস ও আনলক (Admin Bypass)</span>
+              <span>অ্যাডমিন আনলক ও বাইপাস</span>
             </button>
 
             {/* Retry Button */}
@@ -190,7 +253,7 @@ export const EmergencyBroadcastLockOverlay: React.FC<EmergencyBroadcastLockOverl
               className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-white/5 flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
-              <span>রিফ্রেশ / স্ট্যাটাস চেক</span>
+              <span>সার্ভার কানেকশন চেক</span>
             </button>
 
             {/* Optional Student Dismiss if allowed */}
@@ -209,7 +272,7 @@ export const EmergencyBroadcastLockOverlay: React.FC<EmergencyBroadcastLockOverl
       {/* Admin Passcode Modal */}
       <AnimatePresence>
         {showPasscodeModal && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl font-anek">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -221,7 +284,7 @@ export const EmergencyBroadcastLockOverlay: React.FC<EmergencyBroadcastLockOverl
                   setShowPasscodeModal(false);
                   setPasscodeError('');
                 }}
-                className="absolute top-4 right-4 p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                className="absolute top-4 right-4 p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -274,7 +337,7 @@ export const EmergencyBroadcastLockOverlay: React.FC<EmergencyBroadcastLockOverl
                     <button
                       type="button"
                       onClick={() => setShowPasscodeModal(false)}
-                      className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors"
+                      className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors cursor-pointer"
                     >
                       বাতিল
                     </button>
@@ -296,3 +359,4 @@ export const EmergencyBroadcastLockOverlay: React.FC<EmergencyBroadcastLockOverl
     </div>
   );
 };
+

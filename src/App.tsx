@@ -43,6 +43,11 @@ import { FloatingBottomNav } from './components/FloatingBottomNav';
 import { WeakPointTrackerView } from './components/WeakPointTrackerView';
 import { GamificationView } from './components/GamificationView';
 import { AnalyticsDashboardView } from './components/AnalyticsDashboardView';
+import { AiMockTestAndCqEvaluator } from './components/AiMockTestAndCqEvaluator';
+import { MindMapViewerModal } from './components/MindMapViewerModal';
+import { AudioSummaryPlayer } from './components/AudioSummaryPlayer';
+import { ExamEveRevisionModal } from './components/ExamEveRevisionModal';
+import { BoardPredictionMatrixModal } from './components/BoardPredictionMatrixModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { EmergencyBroadcastLockOverlay } from './components/EmergencyBroadcastLockOverlay';
 import { SystemAdminPanel } from './components/SystemAdminPanel';
@@ -177,6 +182,13 @@ export default function StudentDashboard() {
   });
   const [wizardKey, setWizardKey] = useState<number>(0);
   const [showSyllabusAlert, setShowSyllabusAlert] = useState<boolean>(false);
+
+  // Advanced Study Tool Modals & Overlays State
+  const [showPredictionModal, setShowPredictionModal] = useState<boolean>(false);
+  const [showEveModeModal, setShowEveModeModal] = useState<boolean>(false);
+  const [activeMindMapChapter, setActiveMindMapChapter] = useState<string | null>(null);
+  const [activeAudioChapter, setActiveAudioChapter] = useState<string | null>(null);
+  const [practiceChapterFilter, setPracticeChapterFilter] = useState<string | undefined>(undefined);
 
   // Recheck Ban Status Function
   const checkLiveBanStatus = async () => {
@@ -774,6 +786,49 @@ export default function StudentDashboard() {
             </div>
 
           </div>
+
+          {/* QUICK HIGH-VALUE STUDY SUITE BAR */}
+          <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar font-anek">
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowEveModeModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              >
+                <span className="text-sm">🌙</span>
+                <span>পরীক্ষার আগের রাত</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black">HOT</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowPredictionModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              >
+                <span className="text-sm">📊</span>
+                <span>বোর্ড প্রেডিকশন ম্যাট্রিক্স</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black">TREND</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setPracticeChapterFilter(undefined);
+                  setActiveTab('practice');
+                }}
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 hover:from-indigo-500/30 hover:to-purple-500/30 border border-indigo-500/40 text-indigo-300 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              >
+                <span className="text-sm">⚡</span>
+                <span>AI প্র্যাকটিস ও CQ মূল্যায়ন</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-indigo-500 text-white font-black">10/10</span>
+              </button>
+            </div>
+
+            <div className="hidden md:flex items-center gap-2 text-[11px] text-slate-400 font-sans shrink-0">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>SSC Board Rank #1 Engine Active</span>
+            </div>
+          </div>
         </header>
 
         {/* কন্টেন্ট এরিয়া (Ample bottom padding pb-28 sm:pb-32 for the Floating Bottom Bar) */}
@@ -831,6 +886,12 @@ export default function StudentDashboard() {
                   onToggleSuggestion={handleToggleSuggestion}
                   onBatchSetStatus={handleBatchSetStatus}
                   onUpdateProgressData={handleUpdateProgressData}
+                  onOpenMindMap={(chapter) => setActiveMindMapChapter(chapter)}
+                  onOpenAudio={(chapter) => setActiveAudioChapter(chapter)}
+                  onStartPractice={(chapter) => {
+                    setPracticeChapterFilter(chapter);
+                    setActiveTab('practice');
+                  }}
                 />
               </motion.div>
             )}
@@ -856,6 +917,42 @@ export default function StudentDashboard() {
                   sscBatch={userState.profile?.sscBatch || '2028'}
                   onUpdateProgressData={handleUpdateProgressData}
                   onNavigateToSyllabus={() => setActiveTab('syllabus')}
+                />
+              </motion.div>
+            )}
+
+            {/* 4. ⚡ AI প্র্যাকটিস ও CQ মূল্যায়ন (Instant Mock Test & Evaluation) */}
+            {activeTab === 'practice' && (
+              <motion.div
+                key="tab-practice"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25 }}
+              >
+                <AiMockTestAndCqEvaluator
+                  subjects={allActiveSubjects}
+                  customSelectedChapterIds={userState.customSelectedChapterIds}
+                  initialChapterName={practiceChapterFilter}
+                  onNavigateToSyllabus={() => setActiveTab('syllabus')}
+                />
+              </motion.div>
+            )}
+
+            {/* 5. 🌙 পরীক্ষার আগের রাত (Exam Eve Fast Revision Mode) */}
+            {activeTab === 'eve_mode' && (
+              <motion.div
+                key="tab-eve-mode"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25 }}
+              >
+                <ExamEveRevisionModal
+                  isOpen={true}
+                  onClose={() => setActiveTab('syllabus')}
+                  examDate={userState.examDate}
+                  studentName={userState.profile.name}
                 />
               </motion.div>
             )}
@@ -1158,6 +1255,44 @@ export default function StudentDashboard() {
             </motion.div>
           </div>
         )}
+
+        {/* Board Prediction Matrix Modal */}
+        <BoardPredictionMatrixModal
+          isOpen={showPredictionModal}
+          onClose={() => setShowPredictionModal(false)}
+          onStartTest={() => {
+            setShowPredictionModal(false);
+            setActiveTab('practice');
+          }}
+          onOpenMindMap={(chapterName) => {
+            setActiveMindMapChapter(chapterName);
+          }}
+          onOpenAudio={(chapterName) => {
+            setActiveAudioChapter(chapterName);
+          }}
+        />
+
+        {/* Visual Mind Map Viewer Modal */}
+        <MindMapViewerModal
+          isOpen={!!activeMindMapChapter}
+          onClose={() => setActiveMindMapChapter(null)}
+          chapterName={activeMindMapChapter || undefined}
+        />
+
+        {/* Interactive Audio Summary Player Dock / Modal */}
+        <AudioSummaryPlayer
+          isOpen={!!activeAudioChapter}
+          onClose={() => setActiveAudioChapter(null)}
+          chapterName={activeAudioChapter || undefined}
+        />
+
+        {/* Exam Eve Mode Dedicated Quick Modal */}
+        <ExamEveRevisionModal
+          isOpen={showEveModeModal}
+          onClose={() => setShowEveModeModal(false)}
+          examDate={userState.examDate}
+          studentName={userState.profile.name}
+        />
 
         {/* Reset Confirmation Modal */}
         {showResetModal && (

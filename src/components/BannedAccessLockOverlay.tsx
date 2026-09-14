@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShieldAlert, 
@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   HelpCircle
 } from 'lucide-react';
+import { App as CapacitorApp } from '@capacitor/app';
 import { BanCheckResult, unbanDevice, unbanIp } from '../services/deviceSecurityService';
 
 interface BannedAccessLockOverlayProps {
@@ -32,6 +33,33 @@ export const BannedAccessLockOverlay: React.FC<BannedAccessLockOverlayProps> = (
   const [passcodeError, setPasscodeError] = useState('');
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [unlockSuccess, setUnlockSuccess] = useState(false);
+
+  // Hardware Back Button & Popstate Trap
+  useEffect(() => {
+    let handler: any = null;
+    try {
+      CapacitorApp.addListener('backButton', () => {
+        console.warn('Hardware back pressed during Ban Lock - blocked');
+      }).then((h) => {
+        handler = h;
+      });
+    } catch {
+      // ignore
+    }
+
+    const trapHistory = () => {
+      window.history.pushState(null, '', window.location.href);
+    };
+    trapHistory();
+    window.addEventListener('popstate', trapHistory);
+
+    return () => {
+      if (handler && typeof handler.remove === 'function') {
+        handler.remove();
+      }
+      window.removeEventListener('popstate', trapHistory);
+    };
+  }, []);
 
   // Manual re-check
   const handleCheckNow = async () => {

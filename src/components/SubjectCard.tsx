@@ -31,6 +31,9 @@ interface SubjectCardProps {
   onToggleSuggestion: (subjectId: string, index: number) => void;
   onBatchSetStatus: (subject: Subject, status: ChapterStatus) => void;
   onUpdateProgressData?: (chapterId: string, updated: Partial<ChapterProgressData>) => void;
+  onOpenMindMap?: (chapterName: string) => void;
+  onOpenAudio?: (chapterName: string) => void;
+  onStartPractice?: (chapterName: string) => void;
   searchQuery?: string;
   statusFilter?: 'all' | ChapterStatus | 'suggestions_only';
 }
@@ -46,6 +49,9 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
   onToggleSuggestion,
   onBatchSetStatus,
   onUpdateProgressData,
+  onOpenMindMap,
+  onOpenAudio,
+  onStartPractice,
   searchQuery = '',
   statusFilter = 'all',
 }) => {
@@ -244,6 +250,9 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
                     onUpdateStatus={onUpdateStatus}
                     onUpdateNote={onUpdateNote}
                     onUpdateProgressData={onUpdateProgressData}
+                    onOpenMindMap={onOpenMindMap}
+                    onOpenAudio={onOpenAudio}
+                    onStartPractice={onStartPractice}
                   />
                 );
               })}

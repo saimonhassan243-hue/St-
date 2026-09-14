@@ -25,7 +25,7 @@ export type StreamKey = 'science' | 'business' | 'humanities';
 export type ReligionKey = 'islam' | 'hindu' | 'buddhist' | 'christian';
 export type ReligionBn = 'ইসলাম' | 'হিন্দু' | 'বৌদ্ধ' | 'খ্রিস্টান';
 
-export type NavTabKey = 'profile' | 'syllabus' | 'routine' | 'weakpoints' | 'gamification' | 'analytics' | 'progress' | 'suggestions' | 'countdown' | 'admin';
+export type NavTabKey = 'profile' | 'syllabus' | 'routine' | 'practice' | 'weakpoints' | 'gamification' | 'analytics' | 'progress' | 'suggestions' | 'countdown' | 'eve_mode' | 'admin';
 
 export type ChapterStatus = 'not_started' | 'in_progress' | 'completed' | 'revised';
 

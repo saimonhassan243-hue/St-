@@ -33,6 +33,9 @@ interface SubjectsSlideProps {
   onToggleSuggestion: (subjectId: string, index: number) => void;
   onBatchSetStatus: (subject: Subject, status: ChapterStatus) => void;
   onUpdateProgressData?: (chapterId: string, updated: Partial<ChapterProgressData>) => void;
+  onOpenMindMap?: (chapterName: string) => void;
+  onOpenAudio?: (chapterName: string) => void;
+  onStartPractice?: (chapterName: string) => void;
 }
 
 export const SubjectsSlide: React.FC<SubjectsSlideProps> = ({
@@ -55,6 +58,9 @@ export const SubjectsSlide: React.FC<SubjectsSlideProps> = ({
   onToggleSuggestion,
   onBatchSetStatus,
   onUpdateProgressData,
+  onOpenMindMap,
+  onOpenAudio,
+  onStartPractice,
 }) => {
   const [subView, setSubView] = useState<'syllabus' | 'suggestions'>('syllabus');
   const [searchQuery, setSearchQuery] = useState('');
@@ -460,6 +466,9 @@ export const SubjectsSlide: React.FC<SubjectsSlideProps> = ({
                                 onToggleSuggestion={onToggleSuggestion}
                                 onBatchSetStatus={onBatchSetStatus}
                                 onUpdateProgressData={onUpdateProgressData}
+                                onOpenMindMap={onOpenMindMap}
+                                onOpenAudio={onOpenAudio}
+                                onStartPractice={onStartPractice}
                                 searchQuery={searchQuery}
                                 statusFilter={statusFilter}
                               />
@@ -489,6 +498,9 @@ export const SubjectsSlide: React.FC<SubjectsSlideProps> = ({
                                 onToggleSuggestion={onToggleSuggestion}
                                 onBatchSetStatus={onBatchSetStatus}
                                 onUpdateProgressData={onUpdateProgressData}
+                                onOpenMindMap={onOpenMindMap}
+                                onOpenAudio={onOpenAudio}
+                                onStartPractice={onStartPractice}
                                 searchQuery={searchQuery}
                                 statusFilter={statusFilter}
                               />
@@ -517,6 +529,9 @@ export const SubjectsSlide: React.FC<SubjectsSlideProps> = ({
                               onToggleSuggestion={onToggleSuggestion}
                               onBatchSetStatus={onBatchSetStatus}
                               onUpdateProgressData={onUpdateProgressData}
+                              onOpenMindMap={onOpenMindMap}
+                              onOpenAudio={onOpenAudio}
+                              onStartPractice={onStartPractice}
                               searchQuery={searchQuery}
                               statusFilter={statusFilter}
                             />
@@ -544,6 +559,9 @@ export const SubjectsSlide: React.FC<SubjectsSlideProps> = ({
                               onToggleSuggestion={onToggleSuggestion}
                               onBatchSetStatus={onBatchSetStatus}
                               onUpdateProgressData={onUpdateProgressData}
+                              onOpenMindMap={onOpenMindMap}
+                              onOpenAudio={onOpenAudio}
+                              onStartPractice={onStartPractice}
                               searchQuery={searchQuery}
                               statusFilter={statusFilter}
                             />
