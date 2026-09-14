@@ -5,7 +5,7 @@ import {
   BookOpen, Plus, Trash2, RotateCcw, Award, Check,
   Sliders, Sun, Sunset, Moon, Activity, Coffee, Shield,
   Printer, ArrowRight, Zap, Target, BookMarked, Layers,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Sunrise
 } from 'lucide-react';
 import { Subject, StreamKey, ReligionBn, UserProfile, ChapterProgressData } from '../types';
 import { 
@@ -18,6 +18,8 @@ import {
   formatDurationBn
 } from '../utils/routineBuilder';
 import { toBengaliNumber, formatBengaliProgress } from '../utils/progressCalculator';
+import { runAdaptiveRoutineEngine } from '../utils/adaptiveRoutineEngine';
+import { AutoAdaptiveTargetCard } from './AutoAdaptiveTargetCard';
 
 interface RoutineViewProps {
   profile: UserProfile;
@@ -26,6 +28,9 @@ interface RoutineViewProps {
   religionBn: ReligionBn;
   allActiveSubjects?: Subject[];
   chapterProgress?: Record<string, ChapterProgressData>;
+  customSelectedChapterIds?: string[];
+  onUpdateProgressData?: (chapterId: string, updated: Partial<ChapterProgressData>) => void;
+  onNavigateToSyllabus?: (subjectId: string, chapterId: string) => void;
 }
 
 const DEFAULT_INPUTS: ScheduleInputs = {
@@ -36,6 +41,8 @@ const DEFAULT_INPUTS: ScheduleInputs = {
   playEnd: '18:30',
   sleepStart: '22:30',
   sleepEnd: '05:30',
+  mealsPersonalHours: 3.0,
+  prayerWorshipHours: 1.8,
 };
 
 const STORAGE_KEY_INPUTS = 'ssc_routine_builder_inputs_v1';
@@ -48,6 +55,9 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   religionBn,
   allActiveSubjects = [],
   chapterProgress = {},
+  customSelectedChapterIds,
+  onUpdateProgressData,
+  onNavigateToSyllabus,
 }) => {
   // 1. User inputs for automated routine builder
   const [scheduleInputs, setScheduleInputs] = useState<ScheduleInputs>(() => {
@@ -72,7 +82,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   });
 
   // UI state
-  const [showConfigDrawer, setShowConfigDrawer] = useState(true);
+  const [showConfigDrawer, setShowConfigDrawer] = useState(false);
   const [viewMode, setViewMode] = useState<'study_grid' | 'full_day'>('study_grid');
   const [showAddCustomModal, setShowAddCustomModal] = useState(false);
   const [customSlots, setCustomSlots] = useState<RoutineTimeSlot[]>([]);
@@ -106,7 +116,8 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     }));
   };
 
-  // Compute 24-Hour Metrics (Deductions of School, Play, Sleep)
+  // Compute 24-Hour Metrics with Dynamic Time Buffering:
+  // Excludes Sleep (7-8h), Meals/Personal (3h), School/Coaching, Daily Prayer/Worship slots
   const metrics = useMemo(() => {
     return computeScheduleMetrics(scheduleInputs);
   }, [scheduleInputs]);
@@ -121,26 +132,36 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     ];
   }, [allActiveSubjects, stream, religionSubject]);
 
-  // Auto-Allocate Routine Blocks
+  // Run Real-Time Auto-Adaptive Routine Calculation Engine
+  const adaptiveEngineResult = useMemo(() => {
+    return runAdaptiveRoutineEngine(
+      subjectsToUse,
+      chapterProgress,
+      customSelectedChapterIds
+    );
+  }, [subjectsToUse, chapterProgress, customSelectedChapterIds]);
+
+  // Auto-Allocate Routine Blocks aligned with Adaptive Target Chapter
   const automatedStudySlots = useMemo(() => {
     return buildAutomatedRoutine(
       scheduleInputs,
       subjectsToUse,
       stream,
       religionBn,
-      completedTasksMap
+      completedTasksMap,
+      adaptiveEngineResult.targetChapter
     );
-  }, [scheduleInputs, subjectsToUse, stream, religionBn, completedTasksMap]);
+  }, [scheduleInputs, subjectsToUse, stream, religionBn, completedTasksMap, adaptiveEngineResult.targetChapter]);
 
   // Combine automated study slots with any custom slots
   const allStudySlots = useMemo(() => {
     return [...automatedStudySlots, ...customSlots];
   }, [automatedStudySlots, customSlots]);
 
-  // Complete 24-Hour Day Flow
+  // Complete 24-Hour Day Flow with Dynamic Buffers
   const fullDayTimeline = useMemo(() => {
-    return buildFullDayTimeline(scheduleInputs, allStudySlots);
-  }, [scheduleInputs, allStudySlots]);
+    return buildFullDayTimeline(scheduleInputs, allStudySlots, religionBn);
+  }, [scheduleInputs, allStudySlots, religionBn]);
 
   // Toggle mark-as-done for a slot
   const handleToggleTask = (slotId: string) => {
@@ -478,37 +499,49 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   </div>
                 </div>
 
-                {/* 24-Hour Day Deduction Formula Bar */}
+                {/* 24-Hour Day Deduction Formula Bar with Dynamic Time Buffering */}
                 <div className="mt-5 p-4 rounded-2xl bg-slate-950/70 border border-white/5">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs mb-2.5">
                     <span className="font-bold text-slate-200 flex items-center gap-1.5 font-jakarta">
                       <Zap className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>২৪ ঘণ্টার স্বয়ংক্রিয় টাইম-ব্যালান্স ও ফ্রি স্লট ডিডাকশন</span>
+                      <span>২৪ ঘণ্টার স্বয়ংক্রিয় টাইম-ব্যালান্স ও ডায়নামিক টাইম বাফারিং</span>
                     </span>
                     <span className="text-slate-400 font-anek">
-                      ২৪ ঘণ্টা - ({toBengaliNumber(metrics.sleepHours)}h ঘুম + {toBengaliNumber(metrics.schoolHours)}h স্কুল + {toBengaliNumber(metrics.playHours)}h খেলা) = <strong className="text-cyan-400 font-bold">{toBengaliNumber(metrics.freeHours)} ঘণ্টা ফ্রি সময়</strong>
+                      ২৪ ঘণ্টা - ({toBengaliNumber(metrics.sleepHours)}h ঘুম + {toBengaliNumber(metrics.mealsPersonalHours)}h খাবার + {toBengaliNumber(metrics.schoolHours)}h স্কুল + {toBengaliNumber(metrics.worshipPrayerHours)}h নামাজ) = <strong className="text-cyan-400 font-bold">{toBengaliNumber(metrics.freeHours)} ঘণ্টা ফ্রি সময়</strong>
                     </span>
                   </div>
 
                   {/* Multi-segment 24-hour bar */}
                   <div className="w-full h-3.5 rounded-full overflow-hidden flex bg-slate-800 border border-slate-700/60 shadow-inner">
-                    {/* Sleep segment */}
+                    {/* Sleep segment (7-8h) */}
                     <div
                       style={{ width: `${(metrics.sleepMinutes / 1440) * 100}%` }}
                       className="bg-indigo-600 relative group"
-                      title={`ঘুম: ${formatDurationBn(metrics.sleepMinutes)}`}
+                      title={`ঘুম (৭-৮ ঘণ্টা): ${formatDurationBn(metrics.sleepMinutes)}`}
+                    />
+                    {/* Meals & Personal segment (3h) */}
+                    <div
+                      style={{ width: `${(metrics.mealsPersonalMinutes / 1440) * 100}%` }}
+                      className="bg-rose-500 relative group"
+                      title={`খাবার ও ব্যক্তিগত সময় (৩ ঘণ্টা বাফার): ${formatDurationBn(metrics.mealsPersonalMinutes)}`}
                     />
                     {/* School segment */}
                     <div
                       style={{ width: `${(metrics.schoolMinutes / 1440) * 100}%` }}
                       className="bg-amber-500 relative group"
-                      title={`স্কুল: ${formatDurationBn(metrics.schoolMinutes)}`}
+                      title={`স্কুল ও কোচিং: ${formatDurationBn(metrics.schoolMinutes)}`}
+                    />
+                    {/* Prayer/Worship segment (1.8h) */}
+                    <div
+                      style={{ width: `${(metrics.worshipPrayerMinutes / 1440) * 100}%` }}
+                      className="bg-teal-500 relative group"
+                      title={`নামাজ ও উপাসনা: ${formatDurationBn(metrics.worshipPrayerMinutes)}`}
                     />
                     {/* Play segment */}
                     <div
                       style={{ width: `${(metrics.playMinutes / 1440) * 100}%` }}
-                      className="bg-rose-500 relative group"
-                      title={`খেলাধুলা: ${formatDurationBn(metrics.playMinutes)}`}
+                      className="bg-purple-500 relative group"
+                      title={`খেলাধুলা ও মাইন্ড রিফ্রেশ: ${formatDurationBn(metrics.playMinutes)}`}
                     />
                     {/* Study allocated segment */}
                     <div
@@ -520,31 +553,35 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     <div
                       style={{ width: `${(metrics.remainingLeisureMinutes / 1440) * 100}%` }}
                       className="bg-slate-700/60 relative group"
-                      title={`অন্যান্য বিরতি ও খাবার: ${formatDurationBn(metrics.remainingLeisureMinutes)}`}
+                      title={`অবশিষ্ট অবসর বাফার: ${formatDurationBn(metrics.remainingLeisureMinutes)}`}
                     />
                   </div>
 
                   {/* Legend */}
-                  <div className="flex items-center gap-4 flex-wrap mt-2.5 text-[11px] text-slate-400 font-anek">
+                  <div className="flex items-center gap-3.5 flex-wrap mt-2.5 text-[11px] text-slate-400 font-anek">
                     <span className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block" />
                       ঘুম ({toBengaliNumber(metrics.sleepHours)}h)
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
+                      খাবার ও ফ্রেশ ({toBengaliNumber(metrics.mealsPersonalHours)}h)
                     </span>
                     <span className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
                       স্কুল ({toBengaliNumber(metrics.schoolHours)}h)
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
-                      খেলা ({toBengaliNumber(metrics.playHours)}h)
+                      <span className="w-2.5 h-2.5 rounded-full bg-teal-500 inline-block" />
+                      নামাজ ({toBengaliNumber(metrics.worshipPrayerHours)}h)
                     </span>
                     <span className="flex items-center gap-1.5 font-bold text-cyan-300">
                       <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block" />
-                      পড়াশোনা ({toBengaliNumber(metrics.targetStudyHours)}h)
+                      টার্গেট স্টাডি ({toBengaliNumber(metrics.targetStudyHours)}h)
                     </span>
                     <span className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-slate-600 inline-block" />
-                      খাবার ও ব্যক্তিগত সময় ({toBengaliNumber(Math.round((metrics.remainingLeisureMinutes / 60) * 10) / 10)}h)
+                      অবশিষ্ট বাফার ({toBengaliNumber(Math.round((metrics.remainingLeisureMinutes / 60) * 10) / 10)}h)
                     </span>
                   </div>
                 </div>
@@ -552,6 +589,19 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* ============================================================== */}
+        {/* 2.5 REAL-TIME AUTO-ADAPTIVE TARGET CARD (TODAY'S ADAPTIVE CHAPTER) */}
+        {/* ============================================================== */}
+        <div className="mt-6">
+          <AutoAdaptiveTargetCard
+            subjects={subjectsToUse}
+            chapterProgress={chapterProgress}
+            customSelectedChapterIds={customSelectedChapterIds}
+            onUpdateProgressData={onUpdateProgressData || ((_id, _val) => {})}
+            onNavigateToSyllabus={onNavigateToSyllabus}
+          />
+        </div>
 
         {/* ============================================================== */}
         {/* 3. DAILY ROUTINE PROGRESS & VIEW MODE SWITCHER                 */}

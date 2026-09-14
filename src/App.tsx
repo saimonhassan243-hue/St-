@@ -7,7 +7,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   User, BookOpen, Calendar, Target, Star, Timer, 
-  GraduationCap, Award, RotateCcw, AlertCircle, Bookmark, Sparkles, Sliders
+  GraduationCap, Award, RotateCcw, AlertCircle, Bookmark, Sparkles,
+  Shield, ShieldAlert, KeyRound
 } from 'lucide-react';
 import { 
   StreamKey, 
@@ -19,12 +20,15 @@ import {
   UserProfile, 
   UserProgressState,
   NavTabKey,
-  FourthSubjectKey
+  FourthSubjectKey,
+  GlobalNoticeData,
+  FirebaseUserData
 } from './types';
 import { 
   COMPULSORY_SUBJECTS, 
   STREAM_SUBJECTS, 
   RELIGION_DATA,
+  FOURTH_SUBJECT_OPTIONS,
   getFourthSubject,
   mapProfileReligionToSubjectKey,
   mapSubjectKeyToProfileReligion
@@ -36,9 +40,35 @@ import { RoutineView } from './components/RoutineView';
 import { CountdownView } from './components/CountdownView';
 import { SuggestionsView } from './components/SuggestionsView';
 import { FloatingBottomNav } from './components/FloatingBottomNav';
-import { SystemAdminPanel } from './components/SystemAdminPanel';
-import { AdminPasswordModal } from './components/AdminPasswordModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { EmergencyBroadcastLockOverlay } from './components/EmergencyBroadcastLockOverlay';
+import { SystemAdminPanel } from './components/SystemAdminPanel';
+import { UserAuthModal } from './components/UserAuthModal';
+import { OnboardingWizardModal } from './components/OnboardingWizardModal';
+import { BannedAccessLockOverlay } from './components/BannedAccessLockOverlay';
+import { 
+  checkIfDeviceOrIpBanned, 
+  getOrCreateDeviceId, 
+  getDeviceSecurityInfo,
+  BanCheckResult 
+} from './services/deviceSecurityService';
+import { 
+  fetchGlobalNotice, 
+  updateGlobalNotice, 
+  DEFAULT_NOTICE_DATA,
+  STORAGE_KEY_NOTICE 
+} from './services/firebaseNoticeService';
+import { 
+  getLocalAuthUser, 
+  syncUserToFirebase, 
+  calculateStudyMinutes, 
+  sanitizeUserId,
+  hasActiveAuthSession,
+  saveLocalAuthSession,
+  clearLocalAuthSession,
+  hasCompletedOnboardingCheck,
+  setOnboardingCompleted
+} from './services/firebaseUserService';
 
 const STORAGE_KEY = 'ssc_student_dashboard_v2';
 
@@ -99,16 +129,227 @@ export default function StudentDashboard() {
   });
 
   const [showResetModal, setShowResetModal] = useState(false);
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
-  const [showAdminPasswordModal, setShowAdminPasswordModal] = useState<boolean>(false);
 
-  const handleOpenAdminPanel = () => {
-    if (isAdminAuthenticated) {
-      setActiveTab('admin');
-    } else {
-      setShowAdminPasswordModal(true);
+  // Global Notice & Emergency Broadcast State
+  const [globalNotice, setGlobalNotice] = useState<GlobalNoticeData | null>(() => {
+    try {
+      const cached = localStorage.getItem(STORAGE_KEY_NOTICE);
+      if (cached) return JSON.parse(cached);
+    } catch {
+      // ignore
+    }
+    return null;
+  });
+  const [isAdminBypassed, setIsAdminBypassed] = useState<boolean>(false);
+  const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
+  const [showAdminPanel, setShowAdminPanel] = useState<boolean>(false);
+
+  // Device & IP Ban Verification State
+  const [banStatus, setBanStatus] = useState<BanCheckResult>({ isBanned: false });
+  const [isBanChecking, setIsBanChecking] = useState<boolean>(true);
+
+  // Authentication & Onboarding Enforcement State
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return hasActiveAuthSession();
+  });
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(() => {
+    return !hasActiveAuthSession();
+  });
+  const [hasOnboardingCompleted, setHasOnboardingCompleted] = useState<boolean>(() => {
+    return hasCompletedOnboardingCheck();
+  });
+  const [showOnboardingWizard, setShowOnboardingWizard] = useState<boolean>(() => {
+    return hasActiveAuthSession() && !hasCompletedOnboardingCheck();
+  });
+  const [wizardKey, setWizardKey] = useState<number>(0);
+  const [showSyllabusAlert, setShowSyllabusAlert] = useState<boolean>(false);
+
+  // Recheck Ban Status Function
+  const checkLiveBanStatus = async () => {
+    try {
+      const res = await checkIfDeviceOrIpBanned();
+      setBanStatus(res);
+      return res;
+    } catch {
+      return { isBanned: false };
     }
   };
+
+  // Startup Security & Ban Verification
+  useEffect(() => {
+    const runInitialBanVerification = async () => {
+      setIsBanChecking(true);
+      try {
+        await checkLiveBanStatus();
+      } finally {
+        setIsBanChecking(false);
+      }
+    };
+    runInitialBanVerification();
+  }, []);
+
+  // Live Registered User State (Synced with /users/{userId}.json in Firebase RTDB)
+  const [currentUser, setCurrentUser] = useState<FirebaseUserData>(() => {
+    const saved = getLocalAuthUser();
+    if (saved) return saved;
+    return {
+      userId: 'saimon_hassan243_gmail_com',
+      name: DEFAULT_PROFILE.name,
+      email: 'saimon.hassan243@gmail.com',
+      provider: 'Google',
+      batch: DEFAULT_PROFILE.sscBatch,
+      group: DEFAULT_PROFILE.group,
+      created_at: new Date('2026-09-01T08:30:00.000Z').toISOString(),
+      total_study_minutes: 1980,
+      streak_count: 15,
+      last_login: new Date().toISOString(),
+    };
+  });
+
+  // Auto-sync current student session to Firebase Realtime Database at /users/{userId}.json
+  useEffect(() => {
+    const totalMinutes = calculateStudyMinutes(userState.chapters);
+    const fourthSubjectObj = FOURTH_SUBJECT_OPTIONS.find(f => f.id === userState.fourthSubject);
+    const updatedUser: FirebaseUserData = {
+      ...currentUser,
+      name: userState.profile.name || currentUser.name,
+      batch: userState.profile.sscBatch || currentUser.batch,
+      group: userState.profile.group || currentUser.group,
+      fourth_subject: fourthSubjectObj?.label || currentUser.fourth_subject || 'উচ্চতর গণিত',
+      syllabus_path: userState.syllabusPath === 'standard' ? 'বোর্ড স্ট্যান্ডার্ড SSC 2028' : userState.syllabusPath === 'custom' ? 'কাস্টম সিলেবাস বিল্ডার' : (currentUser.syllabus_path || 'বোর্ড স্ট্যান্ডার্ড SSC 2028'),
+      onboarding_completed: hasOnboardingCompleted,
+      streak_count: userState.profile.streakDays || currentUser.streak_count || 15,
+      total_study_minutes: totalMinutes,
+      last_login: new Date().toISOString(),
+    };
+    syncUserToFirebase(updatedUser).then((res) => {
+      if (res.data) {
+        setCurrentUser(res.data);
+      }
+    }).catch((err) => {
+      console.warn('Silent user RTDB sync catch:', err);
+    });
+  }, [
+    userState.profile.name, 
+    userState.profile.group, 
+    userState.profile.sscBatch, 
+    userState.profile.streakDays,
+    userState.fourthSubject,
+    userState.syllabusPath,
+    hasOnboardingCompleted
+  ]);
+
+  const handleUserAuthenticated = (authUserData: FirebaseUserData) => {
+    saveLocalAuthSession(authUserData);
+    setCurrentUser(authUserData);
+    setIsAuthenticated(true);
+    setShowAuthModal(false);
+
+    setUserState((prev) => ({
+      ...prev,
+      profile: {
+        ...prev.profile,
+        name: authUserData.name,
+        group: (authUserData.group as any) || prev.profile.group,
+        sscBatch: authUserData.batch || prev.profile.sscBatch,
+      },
+    }));
+
+    const isDone = authUserData.onboarding_completed || hasCompletedOnboardingCheck();
+    if (isDone) {
+      setHasOnboardingCompleted(true);
+      setOnboardingCompleted(true);
+    } else {
+      setShowOnboardingWizard(true);
+    }
+  };
+
+  const handleLogout = () => {
+    clearLocalAuthSession();
+    setIsAuthenticated(false);
+    setShowAuthModal(true);
+  };
+
+  const handleTabSelect = (tab: NavTabKey) => {
+    if (tab === 'syllabus') {
+      // Force-reset the wizard state to Step 1 and open overlay modal immediately
+      setWizardKey((prev) => prev + 1);
+      setShowOnboardingWizard(true);
+      setShowSyllabusAlert(false);
+      return;
+    }
+    setActiveTab(tab);
+  };
+
+  const handleCompleteOnboarding = (data: {
+    profile: Partial<UserProfile>;
+    stream: StreamKey;
+    religion: ReligionKey;
+    fourthSubject: FourthSubjectKey;
+    syllabusPath: 'standard' | 'custom';
+    customSelectedChapterIds?: string[];
+  }) => {
+    setOnboardingCompleted(true);
+    setHasOnboardingCompleted(true);
+    setShowOnboardingWizard(false);
+    setShowSyllabusAlert(false);
+
+    setUserState((prev) => ({
+      ...prev,
+      profile: { ...prev.profile, ...data.profile },
+      stream: data.stream,
+      religion: data.religion,
+      fourthSubject: data.fourthSubject,
+      syllabusPath: data.syllabusPath,
+      customSelectedChapterIds: data.customSelectedChapterIds,
+      hasCompletedOnboarding: true,
+    }));
+
+    const fourthSubjectObj = FOURTH_SUBJECT_OPTIONS.find(f => f.id === data.fourthSubject);
+    const updatedUser: FirebaseUserData = {
+      ...currentUser,
+      name: data.profile.name || currentUser.name,
+      group: data.profile.group || currentUser.group,
+      batch: data.profile.sscBatch || currentUser.batch,
+      fourth_subject: fourthSubjectObj?.label || data.fourthSubject,
+      syllabus_path: data.syllabusPath === 'standard' ? 'বোর্ড স্ট্যান্ডার্ড SSC 2028' : 'কাস্টম সিলেবাস বিল্ডার',
+      onboarding_completed: true,
+      last_login: new Date().toISOString(),
+    };
+    setCurrentUser(updatedUser);
+    syncUserToFirebase(updatedUser).catch((err) => console.warn('Silent sync catch:', err));
+  };
+
+  // Fetch notice from Firebase Realtime Database
+  const checkNotice = async () => {
+    const notice = await fetchGlobalNotice();
+    if (notice) {
+      setGlobalNotice(notice);
+    }
+  };
+
+  // Initial fetch and 30s polling + online/offline event handlers
+  useEffect(() => {
+    checkNotice();
+    const interval = setInterval(checkNotice, 30000);
+
+    const handleOnline = () => {
+      setIsOffline(false);
+      checkNotice();
+    };
+    const handleOffline = () => {
+      setIsOffline(true);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Sync to localStorage
   useEffect(() => {
@@ -122,8 +363,17 @@ export default function StudentDashboard() {
   // Dynamic Subject Binding based on Selected Religion
   const compulsory = COMPULSORY_SUBJECTS;
   const streamSubjects = useMemo(() => {
-    return STREAM_SUBJECTS[userState.stream] || STREAM_SUBJECTS.science;
-  }, [userState.stream]);
+    const list = STREAM_SUBJECTS[userState.stream] || STREAM_SUBJECTS.science;
+    if (userState.stream === 'science') {
+      const fourthKey = userState.fourthSubject || 'hmath';
+      if (fourthKey === 'hmath') {
+        return list.filter((s) => s.id !== 'hmath');
+      } else if (fourthKey === 'biology') {
+        return list.filter((s) => s.id === 'phy' || s.id === 'chem' || s.id === 'hmath' || s.id === 'bgs');
+      }
+    }
+    return list;
+  }, [userState.stream, userState.fourthSubject]);
 
   // DYNAMIC RELIGION FILTER MECHANICS:
   // 1. Student Profile Data Check: Read selected religion from profile
@@ -294,42 +544,6 @@ export default function StudentDashboard() {
     setShowResetModal(false);
   };
 
-  const handleResetSuggestions = () => {
-    setUserState((prev) => ({
-      ...prev,
-      suggestions: {},
-    }));
-  };
-
-  const handleUpdateStream = (newStream: StreamKey) => {
-    setUserState((prev) => ({
-      ...prev,
-      stream: newStream,
-      profile: {
-        ...prev.profile,
-        group: newStream === 'science' ? 'বিজ্ঞান (Science)' : newStream === 'business' ? 'ব্যবসায় শিক্ষা (Business)' : 'মানবিক (Humanities)',
-      },
-    }));
-  };
-
-  const handleUpdateReligion = (bn: ReligionBn) => {
-    const subKey = mapProfileReligionToSubjectKey(bn);
-    setUserState((prev) => ({
-      ...prev,
-      religion: subKey,
-      profile: {
-        ...prev.profile,
-        religion: bn,
-      },
-    }));
-  };
-
-  const handleImportState = (importedState: UserProgressState) => {
-    if (importedState && typeof importedState === 'object') {
-      setUserState(importedState);
-    }
-  };
-
   const handleSystemRestore = () => {
     setUserState({
       profile: DEFAULT_PROFILE,
@@ -366,38 +580,44 @@ export default function StudentDashboard() {
                       SSC MASTER PLATFORM
                     </h1>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-anek">
-                      {userState?.profile?.sscBatch || 'SSC 2028'}
+                      {userState.profile.sscBatch}
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400 flex items-center gap-1.5 font-anek truncate max-w-xs sm:max-w-sm">
-                    <span className="text-slate-200 font-semibold">{userState?.profile?.name || 'শিক্ষার্থী'}</span>
+                    <span className="text-slate-200 font-semibold">{userState.profile.name}</span>
                     <span className="w-1 h-1 rounded-full bg-slate-600 shrink-0" />
-                    <span className="truncate">{userState?.profile?.school || 'বিদ্যালয়'}</span>
+                    <span className="truncate">{userState.profile.school}</span>
                   </p>
                 </div>
               </div>
 
-              {/* Dynamic Religion Indicator Badge & Admin Shortcut (Visible on mobile/desktop header) */}
-              <div className="flex items-center gap-2 lg:hidden">
+              {/* Dynamic Religion Indicator Badge (Visible on mobile/desktop header) */}
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setActiveTab('syllabus')}
+                  onClick={() => handleTabSelect('syllabus')}
                   title="ক্লিক করে সিলেবাসে ধর্মীয় বই দেখুন"
-                  className="px-2.5 py-1 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-bold font-anek flex items-center gap-1 shrink-0"
+                  className="lg:hidden px-2.5 py-1 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-bold font-anek flex items-center gap-1 shrink-0"
                 >
                   <Bookmark className="w-3 h-3 text-amber-400" />
-                  <span>{userState?.profile?.religion || 'ইসলাম'}</span>
+                  <span>{userState.profile.religion || 'ইসলাম'}</span>
                 </button>
+
+                {/* Mobile User Auth Button */}
                 <button
-                  onClick={handleOpenAdminPanel}
-                  title="সিস্টেম অ্যাডমিন প্যানেল"
-                  className={`px-2.5 py-1 rounded-xl border text-[11px] font-bold font-anek flex items-center gap-1 shrink-0 ${
-                    activeTab === 'admin'
-                      ? 'bg-purple-600 text-white border-purple-400'
-                      : 'bg-purple-500/15 border-purple-500/30 text-purple-300'
-                  }`}
+                  onClick={() => setShowAuthModal(true)}
+                  title="ইউজার একাউন্ট ও Firebase সিঙ্ক"
+                  className="lg:hidden p-1.5 rounded-xl bg-slate-900 border border-emerald-500/30 text-emerald-400 hover:text-white"
                 >
-                  <Sliders className="w-3 h-3 text-purple-400" />
-                  <span>অ্যাডমিন</span>
+                  <User className="w-4 h-4" />
+                </button>
+
+                {/* Mobile Admin Trigger Button */}
+                <button
+                  onClick={() => setShowAdminPanel(true)}
+                  title="সিস্টেম অ্যাডমিন প্যানেল"
+                  className="lg:hidden p-1.5 rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white"
+                >
+                  <Shield className="w-4 h-4 text-indigo-400" />
                 </button>
               </div>
             </div>
@@ -406,8 +626,8 @@ export default function StudentDashboard() {
             <div className="hidden lg:flex items-center gap-3">
               {/* Active Religion Pill */}
               <button
-                onClick={() => setActiveTab('syllabus')}
-                className="px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold font-anek flex items-center gap-1.5 transition-all hover:bg-amber-500/25 cursor-pointer"
+                onClick={() => handleTabSelect('syllabus')}
+                className="px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold font-anek flex items-center gap-1.5 transition-all hover:bg-amber-500/25"
               >
                 <Bookmark className="w-3.5 h-3.5 text-amber-400" />
                 <span>ধর্ম: {religionSubject.name}</span>
@@ -422,21 +642,14 @@ export default function StudentDashboard() {
                   { id: 'progress' as NavTabKey, label: 'প্রোগ্রেস', icon: Target },
                   { id: 'suggestions' as NavTabKey, label: 'সাজেশন', icon: Star },
                   { id: 'countdown' as NavTabKey, label: 'কাউন্টডাউন', icon: Timer },
-                  { id: 'admin' as NavTabKey, label: 'অ্যাডমিন', icon: Sliders },
                 ].map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
                   return (
                     <button
                       key={tab.id}
-                      onClick={() => {
-                        if (tab.id === 'admin') {
-                          handleOpenAdminPanel();
-                        } else {
-                          setActiveTab(tab.id);
-                        }
-                      }}
-                      className={`relative px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 z-10 cursor-pointer ${
+                      onClick={() => handleTabSelect(tab.id)}
+                      className={`relative px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 z-10 ${
                         isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
@@ -453,6 +666,29 @@ export default function StudentDashboard() {
                   );
                 })}
               </div>
+
+              {/* Desktop User Account & Realtime Sync Button */}
+              <button
+                onClick={() => setShowAuthModal(true)}
+                title="শিক্ষার্থী একাউন্ট ও Firebase সিঙ্ক"
+                className="px-3 py-1.5 rounded-xl bg-slate-900 border border-emerald-500/30 hover:border-emerald-500/60 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="font-anek truncate max-w-[100px]">{currentUser.name.split(' ')[0]}</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono font-normal">
+                  {currentUser.provider}
+                </span>
+              </button>
+
+              {/* Desktop Admin Trigger Button */}
+              <button
+                onClick={() => setShowAdminPanel(true)}
+                title="সিস্টেম অ্যাডমিন ও এমার্জেন্সি ব্রডকাস্ট (Passcode: 1919131514)"
+                className="px-3 py-1.5 rounded-xl bg-slate-900 border border-white/10 hover:border-indigo-500/40 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+              >
+                <Shield className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="font-anek">অ্যাডমিন</span>
+              </button>
             </div>
 
           </div>
@@ -473,9 +709,12 @@ export default function StudentDashboard() {
                 <ModernStudentProfile
                   profile={userState.profile}
                   onUpdateProfile={handleUpdateProfile}
-                  onGoToSubjects={() => setActiveTab('syllabus')}
-                  onGoToProgress={() => setActiveTab('progress')}
-                  onRequestAdminAccess={handleOpenAdminPanel}
+                  onGoToSubjects={() => handleTabSelect('syllabus')}
+                  onGoToProgress={() => handleTabSelect('progress')}
+                  onOpenAuthModal={() => setShowAuthModal(true)}
+                  onOpenOnboardingWizard={() => setShowOnboardingWizard(true)}
+                  onLogout={handleLogout}
+                  currentUser={currentUser}
                 />
               </motion.div>
             )}
@@ -529,6 +768,9 @@ export default function StudentDashboard() {
                   religionBn={userState.profile.religion || 'ইসলাম'}
                   allActiveSubjects={allActiveSubjects}
                   chapterProgress={userState.chapters}
+                  customSelectedChapterIds={userState.customSelectedChapterIds}
+                  onUpdateProgressData={handleUpdateProgressData}
+                  onNavigateToSyllabus={() => setActiveTab('syllabus')}
                 />
               </motion.div>
             )}
@@ -550,6 +792,8 @@ export default function StudentDashboard() {
                   customSelectedChapterIds={userState.customSelectedChapterIds}
                   onUpdateProfile={handleUpdateProfile}
                   onResetProgress={() => setShowResetModal(true)}
+                  onUpdateProgressData={handleUpdateProgressData}
+                  onNavigateToSyllabus={() => setActiveTab('syllabus')}
                 />
               </motion.div>
             )}
@@ -567,11 +811,9 @@ export default function StudentDashboard() {
                   <SuggestionsView
                     compulsorySubjects={compulsory}
                     streamSubjects={streamSubjects}
-                    fourthSubject={fourthSubject}
                     religionSubject={religionSubject}
                     suggestionProgress={userState.suggestions}
                     onToggleSuggestion={handleToggleSuggestion}
-                    currentStream={userState.stream}
                   />
                 </div>
               </motion.div>
@@ -590,35 +832,7 @@ export default function StudentDashboard() {
                   profile={userState.profile}
                   examDate={userState.examDate}
                   onUpdateExamDate={handleUpdateExamDate}
-                />
-              </motion.div>
-            )}
-
-            {/* 7. 🛠️ সিস্টেম অ্যাডমিন প্যানেল (System Admin Control) */}
-            {activeTab === 'admin' && (
-              <motion.div
-                key="tab-admin"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                transition={{ duration: 0.25 }}
-              >
-                <SystemAdminPanel
-                  userState={userState}
-                  onUpdateStream={handleUpdateStream}
-                  onUpdateFourthSubject={handleFourthSubjectChange}
-                  onUpdateReligion={handleUpdateReligion}
-                  onResetProgress={handleResetProgress}
-                  onResetSuggestions={handleResetSuggestions}
-                  onFactoryReset={handleSystemRestore}
-                  onImportState={handleImportState}
-                  activeSubjects={allActiveSubjects}
-                  isAuthenticated={isAdminAuthenticated}
-                  onAuthenticate={(status) => setIsAdminAuthenticated(status)}
-                  onLockPanel={() => {
-                    setIsAdminAuthenticated(false);
-                    setActiveTab('profile');
-                  }}
+                  onOpenAdmin={() => setShowAdminPanel(true)}
                 />
               </motion.div>
             )}
@@ -628,38 +842,151 @@ export default function StudentDashboard() {
         {/* MASTER FLOATING BOTTOM NAVIGATION BAR */}
         <FloatingBottomNav
           activeTab={activeTab}
-          onChangeTab={(tab) => {
-            if (tab === 'admin' && !isAdminAuthenticated) {
-              setShowAdminPasswordModal(true);
-            } else {
-              setActiveTab(tab);
-            }
-          }}
+          onChangeTab={handleTabSelect}
           streakCount={userState.profile.streakDays}
-        />
-
-        {/* Password-Protected Admin Passcode Modal */}
-        <AdminPasswordModal
-          isOpen={showAdminPasswordModal}
-          onClose={() => setShowAdminPasswordModal(false)}
-          onSuccess={() => {
-            setIsAdminAuthenticated(true);
-            setShowAdminPasswordModal(false);
-            setActiveTab('admin');
-          }}
         />
 
         {/* Footer */}
         <footer className="w-full text-center text-xs text-slate-500 py-6 border-t border-white/5 bg-slate-950/40">
           <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2 font-anek">
             <span className="text-slate-400">
-              {userState?.profile?.name || 'মো: সাইমন হাসান'} • {userState?.profile?.school || 'সরকারি জিলা স্কুল'} ({userState?.profile?.sscBatch || 'SSC 2028'})
+              {userState.profile.name} • {userState.profile.school} ({userState.profile.sscBatch})
             </span>
             <span className="text-slate-600">
-              ধর্ম পাঠ্যবই: {religionSubject?.name || 'ইসলাম ও নৈতিক শিক্ষা'} • Enterprise Dark Edition
+              ধর্ম পাঠ্যবই: {religionSubject.name} • Enterprise Dark Edition
             </span>
           </div>
         </footer>
+
+        {/* Global Emergency Broadcast Lock Overlay */}
+        {((globalNotice?.isNoticeActive || (isOffline && (globalNotice?.isNoticeActive ?? false))) && !isAdminBypassed) && (
+          <EmergencyBroadcastLockOverlay
+            notice={globalNotice || DEFAULT_NOTICE_DATA}
+            isOffline={isOffline}
+            isOfflineLockActive={isOffline && (globalNotice?.isNoticeActive ?? false)}
+            onAdminBypass={() => setIsAdminBypassed(true)}
+            onDismissNotice={
+              globalNotice?.allowStudentDismiss ? () => setIsAdminBypassed(true) : undefined
+            }
+            onRetryConnection={checkNotice}
+            onDeactivateNoticeFromAdmin={async (passcode) => {
+              const res = await updateGlobalNotice({ isNoticeActive: false }, passcode);
+              if (res.success && res.data) {
+                setGlobalNotice(res.data);
+                return true;
+              }
+              return false;
+            }}
+          />
+        )}
+
+        {/* System Admin Panel */}
+        <SystemAdminPanel
+          isOpen={showAdminPanel}
+          onClose={() => setShowAdminPanel(false)}
+          subjects={allActiveSubjects}
+          chapterProgress={userState.chapters}
+          currentStream={userState.stream}
+          profile={userState.profile}
+          onStreamChange={handleStreamChange}
+          onResetProgress={() => {
+            handleResetProgress();
+            setShowAdminPanel(false);
+          }}
+          globalNotice={globalNotice}
+          onNoticeUpdatedLocally={(updated) => setGlobalNotice(updated)}
+        />
+
+        {/* Device & IP Ban Restriction Overlay Screen (Highest Priority) */}
+        {banStatus.isBanned && (
+          <BannedAccessLockOverlay
+            banDetails={banStatus}
+            onRecheck={async () => {
+              await checkLiveBanStatus();
+            }}
+            onUnbanSuccess={() => {
+              setBanStatus({ isBanned: false });
+            }}
+          />
+        )}
+
+        {/* User Registration & Login Auth Modal (Mandatory Gate when not authenticated) */}
+        <UserAuthModal
+          isOpen={!isAuthenticated || showAuthModal}
+          isMandatory={!isAuthenticated}
+          onClose={() => {
+            if (isAuthenticated) {
+              setShowAuthModal(false);
+            }
+          }}
+          currentUser={currentUser}
+          onUserAuthenticated={handleUserAuthenticated}
+          currentStreak={userState.profile.streakDays || 15}
+          totalStudyMinutes={calculateStudyMinutes(userState.chapters)}
+        />
+
+        {/* Interactive Onboarding & Syllabus Setup Wizard */}
+        <OnboardingWizardModal
+          key={`syllabus-wizard-${wizardKey}`}
+          isOpen={showOnboardingWizard}
+          onClose={() => {
+            setShowOnboardingWizard(false);
+          }}
+          initialProfile={userState.profile}
+          initialStream={userState.stream}
+          initialReligion={userState.religion}
+          initialFourthSubject={userState.fourthSubject || 'hmath'}
+          currentUser={currentUser}
+          onComplete={handleCompleteOnboarding}
+        />
+
+        {/* Syllabus Selection Gate Alert (Dark Neon Glassmorphism) */}
+        {showSyllabusAlert && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0D111D]/85 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-[#151C2C] border border-[#5B50F6]/40 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl shadow-[#5B50F6]/20 relative overflow-hidden"
+            >
+              <div className="absolute -top-24 -right-24 w-48 h-48 bg-[#5B50F6]/20 rounded-full blur-3xl pointer-events-none" />
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-2xl bg-[#5B50F6]/20 border border-[#5B50F6]/40 flex items-center justify-center text-[#5B50F6] shrink-0">
+                  <BookOpen className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    সিলেবাস সেটআপ আবশ্যক
+                  </span>
+                  <h3 className="text-base font-bold text-white font-jakarta mt-1">
+                    আগে আপনার অনবোর্ডিং প্রোফাইল ও সিলেবাস সিলেক্ট করুন
+                  </h3>
+                </div>
+              </div>
+              <p className="text-xs text-slate-300 mb-6 leading-relaxed font-anek">
+                সিলেবাস ও অধ্যায়ভিত্তিক প্রস্তুতি শুরু করতে অনুগ্রহ করে ৩-ধাপের অনবোর্ডিং উইজার্ড সম্পন্ন করে আপনার গ্রুপ, বোর্ড সিলেবাস এবং ৪র্থ বিষয় নিশ্চিত করুন।
+              </p>
+              <div className="flex items-center justify-end gap-3 font-anek">
+                <button
+                  onClick={() => setShowSyllabusAlert(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-xs font-semibold hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  পরে করব
+                </button>
+                <button
+                  onClick={() => {
+                    setShowSyllabusAlert(false);
+                    setShowOnboardingWizard(true);
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#5B50F6] to-[#10B981] text-white text-xs font-bold shadow-lg shadow-[#5B50F6]/30 hover:opacity-95 transition-opacity flex items-center gap-2 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>অনবোর্ডিং ও সিলেবাস সেটআপ করুন</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
 
         {/* Reset Confirmation Modal */}
         {showResetModal && (

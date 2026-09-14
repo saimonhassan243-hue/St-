@@ -1,5 +1,6 @@
 import { Subject, StreamKey, ReligionBn } from '../types';
 import { toBengaliNumber } from './progressCalculator';
+import { getSubjectComplexity, AdaptiveTargetChapter } from './adaptiveRoutineEngine';
 
 export interface ScheduleInputs {
   targetStudyHours: number; // e.g., 5
@@ -9,9 +10,11 @@ export interface ScheduleInputs {
   playEnd: string; // "18:30"
   sleepStart: string; // "22:30"
   sleepEnd: string; // "05:30"
+  mealsPersonalHours?: number; // default 3h (180 mins)
+  prayerWorshipHours?: number; // default 1.8h (110 mins)
 }
 
-export type SlotType = 'study' | 'school' | 'play' | 'sleep' | 'break';
+export type SlotType = 'study' | 'school' | 'play' | 'sleep' | 'break' | 'meal' | 'worship';
 export type StudyTaskType = 'concept_clear' | 'cq_solve' | 'mcq_solve';
 
 export interface RoutineTimeSlot {
@@ -26,6 +29,9 @@ export interface RoutineTimeSlot {
 
   // Study specific
   subjectTitle?: string;
+  chapterTitle?: string;
+  complexityLabel?: string;
+  complexityHours?: string;
   focusTopic?: string;
   assignedTask?: StudyTaskType;
   assignedTaskTitle?: string; // "📘 Concept Clear (৩৩.৩% ওয়েট)"
@@ -43,13 +49,17 @@ export interface ScheduleMetrics {
   sleepMinutes: number;
   schoolMinutes: number;
   playMinutes: number;
-  committedMinutes: number; // Sleep + School + Play
+  mealsPersonalMinutes: number;
+  worshipPrayerMinutes: number;
+  committedMinutes: number; // Sleep + School + Meals + Prayer + Play
   freeMinutes: number; // 1440 - committed
   targetStudyMinutes: number;
   remainingLeisureMinutes: number; // free - targetStudy
   sleepHours: number;
   schoolHours: number;
   playHours: number;
+  mealsPersonalHours: number;
+  worshipPrayerHours: number;
   freeHours: number;
   targetStudyHours: number;
 }
@@ -109,13 +119,18 @@ export const getIntervalMinutes = (startStr: string, endStr: string): number => 
   return (1440 - startM) + endM;
 };
 
-// Compute high-level schedule metrics from inputs
+// Compute high-level schedule metrics with Dynamic Time Buffering:
+// Excludes fixed blocks: Sleep (7-8h), Meals/Personal (3h), School/Coaching, Daily Prayer/Worship slots
 export const computeScheduleMetrics = (inputs: ScheduleInputs): ScheduleMetrics => {
   const sleepMinutes = getIntervalMinutes(inputs.sleepStart, inputs.sleepEnd);
   const schoolMinutes = getIntervalMinutes(inputs.schoolStart, inputs.schoolEnd);
   const playMinutes = getIntervalMinutes(inputs.playStart, inputs.playEnd);
 
-  const committedMinutes = sleepMinutes + schoolMinutes + playMinutes;
+  // Dynamic Buffers: Meals/Personal (3h) and Prayer/Worship (~1.8h = 110m)
+  const mealsPersonalMinutes = Math.round((inputs.mealsPersonalHours ?? 3.0) * 60);
+  const worshipPrayerMinutes = Math.round((inputs.prayerWorshipHours ?? 1.8) * 60);
+
+  const committedMinutes = sleepMinutes + schoolMinutes + mealsPersonalMinutes + worshipPrayerMinutes + playMinutes;
   const freeMinutes = Math.max(0, 1440 - committedMinutes);
   const targetStudyMinutes = Math.round(inputs.targetStudyHours * 60);
   const remainingLeisureMinutes = Math.max(0, freeMinutes - targetStudyMinutes);
@@ -125,6 +140,8 @@ export const computeScheduleMetrics = (inputs: ScheduleInputs): ScheduleMetrics 
     sleepMinutes,
     schoolMinutes,
     playMinutes,
+    mealsPersonalMinutes,
+    worshipPrayerMinutes,
     committedMinutes,
     freeMinutes,
     targetStudyMinutes,
@@ -132,65 +149,87 @@ export const computeScheduleMetrics = (inputs: ScheduleInputs): ScheduleMetrics 
     sleepHours: Math.round((sleepMinutes / 60) * 10) / 10,
     schoolHours: Math.round((schoolMinutes / 60) * 10) / 10,
     playHours: Math.round((playMinutes / 60) * 10) / 10,
+    mealsPersonalHours: Math.round((mealsPersonalMinutes / 60) * 10) / 10,
+    worshipPrayerHours: Math.round((worshipPrayerMinutes / 60) * 10) / 10,
     freeHours: Math.round((freeMinutes / 60) * 10) / 10,
     targetStudyHours: inputs.targetStudyHours,
   };
 };
 
 /**
- * AUTO ROUTINE ALLOCATION ALGORITHM:
- * 1. Deduct School, Play, and Sleep hours from 24 hours to identify free daytime slots.
- * 2. Evenly distribute the requested target study hours into morning, evening, and night blocks.
- * 3. Assign active subjects and 3 core tasks:
- *    - Morning Slot: 📘 Concept Clear (33.3% Weight) - Sharp fresh mind
- *    - Evening Slot: ✍️ CQ Solve (33.3% Weight) - Deep creative problem solving
- *    - Night Slot: 🔘 MCQ Solve (33.4% Weight) - Speed recall & revision
+ * AUTO-ADAPTIVE ROUTINE ALLOCATION ALGORITHM:
+ * 1. Deduct Fixed Blocks: Sleep (7-8h), Meals/Personal (3h), School, Prayer/Worship from 24h.
+ * 2. If targetChapter is provided, align the morning and evening blocks to the target chapter.
+ * 3. Assign chapter duration based on subject complexity:
+ *    - Math/Physics (High): 4-5h average per chapter
+ *    - Bangla/Religion (Standard): 2-3h average per chapter
+ *    - Chemistry/Biology/Accounting: 3.5-4h
+ * 4. Assign 3 core study tasks:
+ *    - Morning Slot: 📘 Concept Clear (33.3% Weight)
+ *    - Evening Slot: ✍️ CQ Solve (33.3% Weight)
+ *    - Night Slot: 🔘 MCQ Solve (33.4% Weight)
  */
 export const buildAutomatedRoutine = (
   inputs: ScheduleInputs,
   activeSubjects: Subject[],
   stream: StreamKey,
   religionBn: ReligionBn,
-  savedCompletionState: Record<string, boolean> = {}
+  savedCompletionState: Record<string, boolean> = {},
+  adaptiveTarget?: AdaptiveTargetChapter | null
 ): RoutineTimeSlot[] => {
   const targetMinutes = Math.max(60, Math.round(inputs.targetStudyHours * 60));
 
-  // Determine subjects for the 3 study blocks:
-  // Subject 1 (Morning): Math or Physics/Accounting
-  const mathSubject = activeSubjects.find(s => s.name.includes('গণিত') || s.name.includes('Math'));
-  const morningSubject = mathSubject || activeSubjects[0] || { name: 'সাধারণ গণিত' };
+  // Determine subject and chapter for study blocks
+  // If an adaptive target chapter exists, prioritize it
+  let morningSubjectName = 'সাধারণ গণিত';
+  let morningChapterTitle = '';
+  let morningComplexityLabel = 'উচ্চ জটিলতা • ৪-৫ ঘণ্টা';
+  let morningComplexityHours = '৪-৫ ঘণ্টা';
 
-  // Subject 2 (Evening): Core Stream Subject
+  if (adaptiveTarget) {
+    morningSubjectName = adaptiveTarget.subjectName;
+    morningChapterTitle = adaptiveTarget.chapterName;
+    morningComplexityLabel = adaptiveTarget.complexity.tierLabelBn;
+    morningComplexityHours = adaptiveTarget.complexity.durationFormattedBn;
+  } else {
+    const mathSubject = activeSubjects.find(s => s.name.includes('গণিত') || s.name.includes('Math'));
+    const morningSubject = mathSubject || activeSubjects[0] || { name: 'সাধারণ গণিত', chapters: [] };
+    morningSubjectName = morningSubject.name;
+    morningChapterTitle = morningSubject.chapters?.[0]?.name || 'মৌলিক অধ্যায়';
+    const comp = getSubjectComplexity(morningSubjectName);
+    morningComplexityLabel = comp.tierLabelBn;
+    morningComplexityHours = comp.durationFormattedBn;
+  }
+
+  // Evening: Core department subject (Physics/Chemistry for Science, Accounting for Business)
   const deptSubject = activeSubjects.find(s => {
     if (stream === 'science') return s.name.includes('পদার্থ') || s.name.includes('রসায়ন') || s.name.includes('জীব');
     if (stream === 'business') return s.name.includes('হিসাব') || s.name.includes('ব্যবসায়');
     return s.name.includes('ইতিহাস') || s.name.includes('পৌরনীতি') || s.name.includes('ভূগোল');
   });
-  const eveningSubject = deptSubject || activeSubjects[1] || { name: 'বিভাগীয় প্রধান বিষয়' };
+  const eveningSubject = deptSubject || activeSubjects[1] || { name: 'বিভাগীয় প্রধান বিষয়', chapters: [] };
+  const eveningComp = getSubjectComplexity(eveningSubject.name);
 
-  // Subject 3 (Night): Religion, Language (Bangla/English), or ICT
+  // Night: Religion or Language / ICT
   const relSubject = activeSubjects.find(s => s.name.includes('ধর্ম') || s.name.includes('শিক্ষা'));
-  const nightSubject = relSubject || activeSubjects.find(s => s.name.includes('বাংলা') || s.name.includes('ইংরেজি') || s.name.includes('তথ্য')) || { name: `${religionBn} ও নৈতিক শিক্ষা` };
+  const nightSubject = relSubject || activeSubjects.find(s => s.name.includes('বাংলা') || s.name.includes('ইংরেজি') || s.name.includes('তথ্য')) || { name: `${religionBn} ও নৈতিক শিক্ষা`, chapters: [] };
+  const nightComp = getSubjectComplexity(nightSubject.name);
 
-  // Calculate duration distribution for morning, evening, and night:
-  // Evening is typically the longest study block (35-40%), Morning (30%), Night (30%)
+  // Distribute duration proportionally:
   let morningDuration = 0;
   let eveningDuration = 0;
   let nightDuration = 0;
   let afternoonDuration = 0;
 
   if (inputs.targetStudyHours <= 4) {
-    // 4 hours or less: Split across morning, evening, night
-    morningDuration = Math.round((targetMinutes * 0.3) / 15) * 15;
-    eveningDuration = Math.round((targetMinutes * 0.4) / 15) * 15;
+    morningDuration = Math.round((targetMinutes * 0.35) / 15) * 15;
+    eveningDuration = Math.round((targetMinutes * 0.40) / 15) * 15;
     nightDuration = targetMinutes - (morningDuration + eveningDuration);
   } else if (inputs.targetStudyHours <= 6) {
-    // 5 to 6 hours: Morning 90-105m, Evening 120-150m, Night 90-105m
-    morningDuration = Math.round((targetMinutes * 0.3) / 15) * 15;
-    eveningDuration = Math.round((targetMinutes * 0.4) / 15) * 15;
+    morningDuration = Math.round((targetMinutes * 0.32) / 15) * 15;
+    eveningDuration = Math.round((targetMinutes * 0.42) / 15) * 15;
     nightDuration = targetMinutes - (morningDuration + eveningDuration);
   } else {
-    // > 6 hours (Intensive preparation): 4 blocks (Morning, Afternoon, Evening, Night)
     morningDuration = 105; // 1h 45m
     afternoonDuration = 90; // 1h 30m
     eveningDuration = 150; // 2h 30m
@@ -198,25 +237,21 @@ export const buildAutomatedRoutine = (
     if (nightDuration < 60) nightDuration = 60;
   }
 
-  // 1. Morning study block placement:
-  // Starts after waking up (sleepEnd + 30 mins for prayer/fresh)
+  // 1. Morning study block:
   const wakeM = timeToMinutes(inputs.sleepEnd);
-  const morningStartM = wakeM + 30; // e.g. 05:30 + 30 = 06:00
+  const morningStartM = wakeM + 30; // 30m buffer for morning prayer/worship & fresh
   const morningEndM = morningStartM + morningDuration;
 
-  // 2. Evening study block placement:
-  // Starts right after play/relaxation ends (playEnd)
-  const playEndM = timeToMinutes(inputs.playEnd); // e.g. 18:30 (06:30 PM)
+  // 2. Evening study block:
+  const playEndM = timeToMinutes(inputs.playEnd);
   const eveningStartM = playEndM;
   const eveningEndM = eveningStartM + eveningDuration;
 
-  // 3. Night study block placement:
-  // Starts after dinner break (e.g. 21:00 or 21:15) and ends around sleepStart
-  const sleepStartM = timeToMinutes(inputs.sleepStart); // e.g. 22:30
+  // 3. Night study block:
+  const sleepStartM = timeToMinutes(inputs.sleepStart);
   const nightEndM = sleepStartM;
   const nightStartM = nightEndM - nightDuration;
 
-  // Build the list of slots
   const slots: RoutineTimeSlot[] = [];
 
   // Morning Study Block
@@ -231,23 +266,28 @@ export const buildAutomatedRoutine = (
     formattedTime: formatTimeRangeBn(morningStartStr, morningEndStr),
     durationMinutes: morningDuration,
     durationFormatted: formatDurationBn(morningDuration),
-    subjectTitle: morningSubject.name,
-    focusTopic: 'মূল সূত্র, উপপাদ্য ও মৌলিক ধারণা স্পষ্টকরণ',
+    subjectTitle: morningSubjectName,
+    chapterTitle: morningChapterTitle,
+    complexityLabel: morningComplexityLabel,
+    complexityHours: morningComplexityHours,
+    focusTopic: morningChapterTitle ? `অধ্যায়: ${morningChapterTitle} - মূল সূত্র ও কনসেপ্ট ক্লিয়ার` : 'মূল সূত্র, উপপাদ্য ও মৌলিক ধারণা স্পষ্টকরণ',
     assignedTask: 'concept_clear',
     assignedTaskTitle: '📘 Concept Clear (৩৩.৩% ওয়েট)',
     taskBadgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
     isCompleted: Boolean(savedCompletionState['block_morning_study']),
-    categoryTag: 'আবশ্যিক মৌলিক',
+    categoryTag: 'অটো-টার্গেট মৌলিক',
     categoryTagColor: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
   });
 
-  // Optional Afternoon Study Block for intensive study plans (>6h)
+  // Optional Afternoon Study Block for intensive plans (>6h)
   if (afternoonDuration > 0) {
-    const afternoonStartM = timeToMinutes(inputs.schoolEnd) + 90; // 1.5h after school (lunch/rest)
+    const afternoonStartM = timeToMinutes(inputs.schoolEnd) + 90;
     const afternoonEndM = afternoonStartM + afternoonDuration;
     const aftStartStr = minutesToTime(afternoonStartM);
     const aftEndStr = minutesToTime(afternoonEndM);
-    const extraSubject = activeSubjects[2] || { name: 'বাংলা ২য় পত্র / ইংরেজি' };
+    const extraSubject = activeSubjects[2] || { name: 'বাংলা ২য় পত্র / ইংরেজি', chapters: [] };
+    const aftComp = getSubjectComplexity(extraSubject.name);
+
     slots.push({
       id: 'block_afternoon_study',
       type: 'study',
@@ -258,6 +298,9 @@ export const buildAutomatedRoutine = (
       durationMinutes: afternoonDuration,
       durationFormatted: formatDurationBn(afternoonDuration),
       subjectTitle: extraSubject.name,
+      chapterTitle: extraSubject.chapters?.[0]?.name,
+      complexityLabel: aftComp.tierLabelBn,
+      complexityHours: aftComp.durationFormattedBn,
       focusTopic: 'ব্যাকরণ, অনুধাবন ও লিখিত প্রস্তুতি',
       assignedTask: 'concept_clear',
       assignedTaskTitle: '📘 Concept Clear (৩৩.৩% ওয়েট)',
@@ -281,6 +324,9 @@ export const buildAutomatedRoutine = (
     durationMinutes: eveningDuration,
     durationFormatted: formatDurationBn(eveningDuration),
     subjectTitle: eveningSubject.name,
+    chapterTitle: eveningSubject.chapters?.[0]?.name,
+    complexityLabel: eveningComp.tierLabelBn,
+    complexityHours: eveningComp.durationFormattedBn,
     focusTopic: 'বিগত বছরের বোর্ড সৃজনশীল ও মডেল টেস্ট CQ সমাধান',
     assignedTask: 'cq_solve',
     assignedTaskTitle: '✍️ CQ Solve (৩৩.৩% ওয়েট)',
@@ -303,6 +349,9 @@ export const buildAutomatedRoutine = (
     durationMinutes: nightDuration,
     durationFormatted: formatDurationBn(nightDuration),
     subjectTitle: nightSubject.name,
+    chapterTitle: nightSubject.chapters?.[0]?.name,
+    complexityLabel: nightComp.tierLabelBn,
+    complexityHours: nightComp.durationFormattedBn,
     focusTopic: 'বহুনির্বাচনী দ্রুত সমাধান, জ্ঞানমূলক প্রশ্ন ও সারসংক্ষেপ রিভিশন',
     assignedTask: 'mcq_solve',
     assignedTaskTitle: '🔘 MCQ Solve (৩৩.৪% ওয়েট)',
@@ -315,44 +364,21 @@ export const buildAutomatedRoutine = (
   return slots;
 };
 
-// Generate complete 24-hour day schedule for visual timetable comparison
+// Generate complete 24-hour day schedule with DYNAMIC TIME BUFFERING:
+// Excludes fixed blocks: Sleep (7-8h), Meals/Personal (3h), School/Coaching, Daily Prayer/Worship slots
 export const buildFullDayTimeline = (
   inputs: ScheduleInputs,
-  studySlots: RoutineTimeSlot[]
+  studySlots: RoutineTimeSlot[],
+  religionBn: ReligionBn = 'ইসলাম'
 ): RoutineTimeSlot[] => {
   const schoolDuration = getIntervalMinutes(inputs.schoolStart, inputs.schoolEnd);
   const playDuration = getIntervalMinutes(inputs.playStart, inputs.playEnd);
   const sleepDuration = getIntervalMinutes(inputs.sleepStart, inputs.sleepEnd);
 
-  const nonStudySlots: RoutineTimeSlot[] = [
-    {
-      id: 'fixed_school',
-      type: 'school',
-      periodName: '🏫 স্কুল ও ক্লাস সময় (School Hours)',
-      startTime: inputs.schoolStart,
-      endTime: inputs.schoolEnd,
-      formattedTime: formatTimeRangeBn(inputs.schoolStart, inputs.schoolEnd),
-      durationMinutes: schoolDuration,
-      durationFormatted: formatDurationBn(schoolDuration),
-      focusTopic: 'স্কুলের নিয়মিত ক্লাস, প্র্যাকটিক্যাল ল্যাব ও শিক্ষক নোট',
-      isCompleted: false,
-      categoryTag: 'প্রাতিষ্ঠানিক',
-      categoryTagColor: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-    },
-    {
-      id: 'fixed_play',
-      type: 'play',
-      periodName: '⚽ খেলাধুলা ও মাইন্ড রিফ্রেশ (Play & Refreshment)',
-      startTime: inputs.playStart,
-      endTime: inputs.playEnd,
-      formattedTime: formatTimeRangeBn(inputs.playStart, inputs.playEnd),
-      durationMinutes: playDuration,
-      durationFormatted: formatDurationBn(playDuration),
-      focusTopic: 'শারীরিক ব্যায়াম, বন্ধুদের সাথে খেলা ও মস্তিষ্ক রিচার্জ',
-      isCompleted: false,
-      categoryTag: 'বিনোদন ও স্বাস্থ্য',
-      categoryTagColor: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
-    },
+  const isIslam = religionBn === 'ইসলাম';
+  const worshipLabel = isIslam ? 'নামাজ' : 'উপাসনা ও প্রার্থনা';
+
+  const fixedSlots: RoutineTimeSlot[] = [
     {
       id: 'fixed_sleep',
       type: 'sleep',
@@ -362,15 +388,85 @@ export const buildFullDayTimeline = (
       formattedTime: formatTimeRangeBn(inputs.sleepStart, inputs.sleepEnd),
       durationMinutes: sleepDuration,
       durationFormatted: formatDurationBn(sleepDuration),
-      focusTopic: 'পরবর্তী দিনের জন্য পূর্ণ শক্তি অর্জন ও স্মৃতি সংরক্ষণ',
+      focusTopic: 'মস্তিষ্কের স্মৃতি একত্রীকরণ ও শারীরিক পূর্ণ শক্তি অর্জন (৭-৮ ঘণ্টা)',
       isCompleted: false,
-      categoryTag: 'বিশ্রাম ও স্বাস্থ্য',
+      categoryTag: 'ঘুম ও স্বাস্থ্য (৭-৮h)',
       categoryTagColor: 'bg-slate-700/40 text-slate-300 border-slate-600/40',
+    },
+    {
+      id: 'fixed_morning_prep',
+      type: 'meal',
+      periodName: `🌅 ফজর ${worshipLabel}, ফ্রেশ হওয়া ও সকালের নাস্তা`,
+      startTime: inputs.sleepEnd,
+      endTime: minutesToTime(timeToMinutes(inputs.sleepEnd) + 30),
+      formattedTime: formatTimeRangeBn(inputs.sleepEnd, minutesToTime(timeToMinutes(inputs.sleepEnd) + 30)),
+      durationMinutes: 30,
+      durationFormatted: '৩০ মিনিট',
+      focusTopic: `${worshipLabel} আদায়, ওযু/গোসল, স্বাস্থ্যকর নাস্তা ও দিনের মানসিক প্রস্তুতি`,
+      isCompleted: false,
+      categoryTag: 'খাবার ও ইবাদত',
+      categoryTagColor: 'bg-teal-500/15 text-teal-300 border-teal-500/30',
+    },
+    {
+      id: 'fixed_school',
+      type: 'school',
+      periodName: '🏫 স্কুল ও কোচিং সময় (School / Coaching)',
+      startTime: inputs.schoolStart,
+      endTime: inputs.schoolEnd,
+      formattedTime: formatTimeRangeBn(inputs.schoolStart, inputs.schoolEnd),
+      durationMinutes: schoolDuration,
+      durationFormatted: formatDurationBn(schoolDuration),
+      focusTopic: 'স্কুল ক্লাস, প্র্যাকটিক্যাল ল্যাব ও শিক্ষক লেকচার নোট সংগ্রহ',
+      isCompleted: false,
+      categoryTag: 'প্রাতিষ্ঠানিক সময়',
+      categoryTagColor: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+    },
+    {
+      id: 'fixed_lunch_break',
+      type: 'meal',
+      periodName: `🍽️ যোহর ${worshipLabel}, দুপুরের খাবার ও বিশ্রাম`,
+      startTime: inputs.schoolEnd,
+      endTime: minutesToTime(timeToMinutes(inputs.schoolEnd) + 60),
+      formattedTime: formatTimeRangeBn(inputs.schoolEnd, minutesToTime(timeToMinutes(inputs.schoolEnd) + 60)),
+      durationMinutes: 60,
+      durationFormatted: '১.০ ঘণ্টা',
+      focusTopic: 'পুষ্টিকর মধ্যাহ্নভোজ, হাত-মুখ ধোয়া এবং ২০-৩০ মিনিট পাওয়ার ন্যাপ',
+      isCompleted: false,
+      categoryTag: 'খাবার ও বিশ্রাম (৩h বাফার)',
+      categoryTagColor: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+    },
+    {
+      id: 'fixed_play',
+      type: 'play',
+      periodName: `⚽ আসর ${worshipLabel}, খেলাধুলা ও মাইন্ড রিফ্রেশ`,
+      startTime: inputs.playStart,
+      endTime: inputs.playEnd,
+      formattedTime: formatTimeRangeBn(inputs.playStart, inputs.playEnd),
+      durationMinutes: playDuration,
+      durationFormatted: formatDurationBn(playDuration),
+      focusTopic: 'শারীরিক এক্টিভিটি, মুক্ত বাতাসে হাঁটা ও রক্ত সঞ্চালন বৃদ্ধি',
+      isCompleted: false,
+      categoryTag: 'স্বাস্থ্য ও বিনোদন',
+      categoryTagColor: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
+    },
+    {
+      id: 'fixed_dinner_worship',
+      type: 'meal',
+      periodName: `🍲 এশা ${worshipLabel}, নৈশভোজ ও পরিবারের সাথে সময়`,
+      startTime: minutesToTime(timeToMinutes(inputs.sleepStart) - 60),
+      endTime: inputs.sleepStart,
+      formattedTime: formatTimeRangeBn(minutesToTime(timeToMinutes(inputs.sleepStart) - 60), inputs.sleepStart),
+      durationMinutes: 60,
+      durationFormatted: '১.০ ঘণ্টা',
+      focusTopic: 'রাতের হালকা খাবার, পারিবারিক আলাপচারিতা ও বিছানায় যাওয়ার প্রস্তুতি',
+      isCompleted: false,
+      categoryTag: 'খাবার ও পারিবারিক (৩h বাফার)',
+      categoryTagColor: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
     },
   ];
 
-  // Combine and sort by chronological start time
-  const all = [...studySlots, ...nonStudySlots];
+  const all = [...studySlots, ...fixedSlots];
   all.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
   return all;
 };
+

@@ -4,9 +4,10 @@ import {
   User, School, MapPin, Phone, Calendar, 
   Sparkles, Upload, Edit3, Check, X, ShieldCheck,
   Camera, Award, CheckCircle2, Bookmark, Flame, ArrowRight,
-  RefreshCw, CheckCircle, Info, GraduationCap, BookOpen, Lock, KeyRound, ShieldAlert
+  RefreshCw, CheckCircle, Info, GraduationCap, BookOpen,
+  Compass, LogOut
 } from 'lucide-react';
-import { UserProfile, ReligionBn } from '../types';
+import { UserProfile, ReligionBn, FirebaseUserData } from '../types';
 
 export const AI_AVATARS_LIST = [
   {
@@ -52,7 +53,10 @@ interface ModernStudentProfileProps {
   onUpdateProfile: (updated: Partial<UserProfile>) => void;
   onGoToSubjects?: () => void;
   onGoToProgress?: () => void;
-  onRequestAdminAccess?: () => void;
+  onOpenAuthModal?: () => void;
+  onOpenOnboardingWizard?: () => void;
+  onLogout?: () => void;
+  currentUser?: FirebaseUserData | null;
 }
 
 export const ModernStudentProfile: React.FC<ModernStudentProfileProps> = ({
@@ -60,7 +64,10 @@ export const ModernStudentProfile: React.FC<ModernStudentProfileProps> = ({
   onUpdateProfile,
   onGoToSubjects,
   onGoToProgress,
-  onRequestAdminAccess,
+  onOpenAuthModal,
+  onOpenOnboardingWizard,
+  onLogout,
+  currentUser,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<UserProfile>(profile);
@@ -184,20 +191,41 @@ export const ModernStudentProfile: React.FC<ModernStudentProfileProps> = ({
             </div>
           </div>
 
-          {/* Action Buttons: Edit Profile & Master Admin Access */}
-          <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-auto">
-            {onRequestAdminAccess && (
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            {onOpenAuthModal && (
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                type="button"
-                id="btn-profile-master-admin-login"
-                onClick={onRequestAdminAccess}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shadow-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 hover:border-purple-400 font-jakarta cursor-pointer"
-                title="মাস্টার অ্যাডমিন পাসকোড ভেরিফিকেশন প্যানেল"
+                onClick={onOpenAuthModal}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-semibold bg-[#151C2C] hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 transition-all shadow-md cursor-pointer font-anek"
               >
-                <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-                <span>মাস্টার অ্যাডমিন লগইন</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Firebase সিঙ্ক ও একাউন্ট</span>
+              </motion.button>
+            )}
+
+            {onOpenOnboardingWizard && (
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={onOpenOnboardingWizard}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-semibold bg-[#151C2C] hover:bg-slate-800 text-[#5B50F6] border border-[#5B50F6]/40 transition-all shadow-md cursor-pointer font-anek"
+              >
+                <Compass className="w-3.5 h-3.5 text-[#5B50F6]" />
+                <span>অনবোর্ডিং ও সিলেবাস রি-সেটআপ</span>
+              </motion.button>
+            )}
+
+            {onLogout && (
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={onLogout}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all shadow-md cursor-pointer font-anek"
+                title="লগআউট করুন ও সেশন ক্লিয়ার করুন"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>লগআউট</span>
               </motion.button>
             )}
 

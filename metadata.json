@@ -1,6 +1,6 @@
 {
   "name": "SSC Student Dashboard & Syllabus Tracker",
-  "description": "Comprehensive student dashboard with master floating bottom navigation, dynamic religion textbook filtering, interactive syllabus tracker, routine, suggestions, and countdown.",
+  "description": "Comprehensive student dashboard featuring Live User Analytics & Management in Admin Panel, Firebase Realtime Database User Syncing, Exam Countdown Timer, and Global Emergency Broadcast Lock.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

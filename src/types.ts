@@ -74,9 +74,70 @@ export interface UserProgressState {
   stream: StreamKey;
   religion: ReligionKey;
   fourthSubject?: FourthSubjectKey;
+  syllabusPath?: 'standard' | 'custom';
+  hasCompletedOnboarding?: boolean;
   customSelectedChapterIds?: string[]; // chapterIds included in custom syllabus filter
   chapters: Record<string, ChapterProgressData>; // chapterId -> data
   suggestions: Record<string, boolean>; // `${subjectId}_${suggestionIndex}` -> mastered
   examDate: string; // ISO date string
   routine?: RoutineSlot[];
 }
+
+export interface GlobalNoticeData {
+  isNoticeActive: boolean;
+  title: string;
+  message: string;
+  severity?: 'urgent' | 'warning' | 'info';
+  updatedAt?: string;
+  updatedBy?: string;
+  allowStudentDismiss?: boolean;
+}
+
+export interface DeviceSecurityInfo {
+  deviceID: string;
+  ipAddress: string;
+  userAgent?: string;
+  last_seen?: string;
+}
+
+export interface BannedDeviceRecord {
+  deviceID: string;
+  reason?: string;
+  banned_at: string;
+  banned_by?: string;
+  user_name?: string;
+  user_email?: string;
+}
+
+export interface BannedIpRecord {
+  ipAddress: string;
+  reason?: string;
+  banned_at: string;
+  banned_by?: string;
+  user_name?: string;
+  user_email?: string;
+}
+
+export interface FirebaseUserData {
+  userId?: string;
+  name: string;
+  email: string;
+  provider: 'Google' | 'Email';
+  batch: string;
+  group: string;
+  created_at: string;
+  total_study_minutes: number;
+  streak_count: number;
+  last_login: string;
+  fourth_subject?: string;
+  syllabus_path?: string;
+  onboarding_completed?: boolean;
+  security_info?: DeviceSecurityInfo;
+  is_banned?: boolean;
+}
+
+export interface AuthSession {
+  isLoggedIn: boolean;
+  user: FirebaseUserData;
+}
+

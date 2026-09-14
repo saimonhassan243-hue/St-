@@ -212,3 +212,12 @@ export const calculateAlgorithmicProgress = (
     formattedBengaliProgress: formatBengaliProgress(totalProgressPercent),
   };
 };
+
+export const calculateTotalProgress = (
+  subjects: Subject[],
+  chapterProgress: Record<string, ChapterProgressData>,
+  selectedChapterIds?: string[]
+): number => {
+  return calculateAlgorithmicProgress(subjects, chapterProgress, selectedChapterIds).totalProgressPercent;
+};
+

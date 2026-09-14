@@ -1,1431 +1,1594 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import {
-  ShieldAlert,
-  ShieldCheck,
-  Lock,
-  Unlock,
-  KeyRound,
-  Sliders,
-  Layers,
-  RotateCcw,
-  CheckCircle2,
-  AlertTriangle,
-  BookOpen,
-  Atom,
-  Briefcase,
-  Landmark,
-  FileCheck,
-  TrendingUp,
-  Download,
-  Upload,
-  Bookmark,
-  Sparkles,
-  Zap,
-  Target,
-  Clock,
-  HardDrive,
-  Search,
-  School,
-  User,
-  GraduationCap,
-  Eye,
-  EyeOff,
-  Copy,
-  LogOut,
-  ChevronDown,
-  ChevronUp,
-  Filter,
-  Users,
-  Check,
-  X
+import { 
+  ShieldCheck, ShieldAlert, Radio, Send, RefreshCw, 
+  RotateCcw, Layers, CheckCircle2, AlertTriangle, KeyRound, 
+  X, Check, Lock, Unlock, Server, BookOpen, Activity, 
+  Database, UserCheck, AlertOctagon, Terminal, Users,
+  Search, Filter, Calendar, Clock, Flame, Mail, Award,
+  Sparkles, ExternalLink, Globe, Ban, Smartphone, Laptop
 } from 'lucide-react';
-import {
-  Subject,
-  StreamKey,
-  ReligionBn,
-  FourthSubjectKey,
-  UserProgressState,
-  ChapterStatus
+import { 
+  Subject, StreamKey, UserProfile, ChapterProgressData, 
+  GlobalNoticeData, ChapterStatus, FirebaseUserData,
+  BannedDeviceRecord, BannedIpRecord
 } from '../types';
-import {
-  STREAM_OPTIONS,
-  FOURTH_SUBJECT_OPTIONS,
-  COMPULSORY_SUBJECTS,
-  STREAM_SUBJECTS,
-  RELIGION_DATA,
-} from '../data/curriculum';
-
-// Fixed Master Passcode strictly set as required
-const MASTER_ADMIN_PASSCODE = '1919131514';
-
-export interface StudentMonitoringRecord {
-  id: string;
-  isCurrentUser?: boolean;
-  name: string;
-  school: string;
-  sscBatch: string;
-  classLevel: string;
-  group: string;
-  religion: ReligionBn;
-  district: string;
-  progressPercent: number;
-  selectedChapters: {
-    subjectName: string;
-    chapters: {
-      id: string;
-      title: string;
-      status: ChapterStatus;
-      bookReading: boolean;
-      cqPractice: boolean;
-      mcqPractice: boolean;
-    }[];
-  }[];
-}
+import { 
+  MASTER_ADMIN_PASSCODE, 
+  updateGlobalNotice, 
+  fetchGlobalNotice, 
+  RTDB_BASE_URL, 
+  NOTICE_ENDPOINT,
+  STORAGE_KEY_ADMIN_AUTH
+} from '../services/firebaseNoticeService';
+import { 
+  fetchAllUsersFromFirebase, 
+  formatStudyHoursBn, 
+  RTDB_USERS_ENDPOINT 
+} from '../services/firebaseUserService';
+import { 
+  banDeviceAndIp,
+  unbanDevice,
+  unbanIp,
+  unbanUserAll,
+  fetchBannedLists,
+  RTDB_BANNED_DEVICES_ENDPOINT,
+  RTDB_BANNED_IPS_ENDPOINT
+} from '../services/deviceSecurityService';
+import { toBengaliNumber, calculateTotalProgress } from '../utils/progressCalculator';
 
 interface SystemAdminPanelProps {
-  userState: UserProgressState;
-  onUpdateStream: (newStream: StreamKey) => void;
-  onUpdateFourthSubject: (key: FourthSubjectKey) => void;
-  onUpdateReligion: (bn: ReligionBn) => void;
+  isOpen: boolean;
+  onClose: () => void;
+  subjects: Subject[];
+  chapterProgress: Record<string, ChapterProgressData>;
+  currentStream: StreamKey;
+  profile: UserProfile;
+  onStreamChange: (stream: StreamKey) => void;
   onResetProgress: () => void;
-  onResetSuggestions: () => void;
-  onFactoryReset: () => void;
-  onImportState?: (importedState: UserProgressState) => void;
-  activeSubjects: Subject[];
-  isAuthenticated?: boolean;
-  onAuthenticate?: (status: boolean) => void;
-  onLockPanel?: () => void;
+  globalNotice: GlobalNoticeData | null;
+  onNoticeUpdatedLocally: (notice: GlobalNoticeData) => void;
 }
 
+type AdminSubTab = 'users' | 'banned' | 'broadcast' | 'metrics';
+
 export const SystemAdminPanel: React.FC<SystemAdminPanelProps> = ({
-  userState,
-  onUpdateStream,
-  onUpdateFourthSubject,
-  onUpdateReligion,
+  isOpen,
+  onClose,
+  subjects,
+  chapterProgress,
+  currentStream,
+  profile,
+  onStreamChange,
   onResetProgress,
-  onResetSuggestions,
-  onFactoryReset,
-  onImportState,
-  activeSubjects,
-  isAuthenticated: propIsAuthenticated,
-  onAuthenticate: propOnAuthenticate,
-  onLockPanel: propOnLockPanel,
+  globalNotice,
+  onNoticeUpdatedLocally,
 }) => {
   // Authentication State
-  const [localAuth, setLocalAuth] = useState<boolean>(false);
-  const isAuthenticated = propIsAuthenticated !== undefined ? propIsAuthenticated : localAuth;
-
-  // Passcode Input Modal State
-  const [passcodeInput, setPasscodeInput] = useState('');
-  const [showPasswordText, setShowPasswordText] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [shakeAnimation, setShakeAnimation] = useState(false);
-
-  // Active Admin Sub-tab: 'monitoring' (User Data & School Monitoring) | 'controls' (Curriculum & Reset Controls)
-  const [activeAdminView, setActiveAdminView] = useState<'monitoring' | 'controls'>('monitoring');
-
-  // Search & Filters for School Monitoring
-  const [searchQuery, setSearchQuery] = useState('');
-  const [streamFilter, setStreamFilter] = useState<'all' | 'science' | 'business' | 'humanities'>('all');
-  const [selectedStudentDetail, setSelectedStudentDetail] = useState<StudentMonitoringRecord | null>(null);
-
-  // System Notifications Toast
-  const [toastNotice, setToastNotice] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-
-  // Confirmation modal states
-  const [confirmModalType, setConfirmModalType] = useState<
-    'none' | 'reset-progress' | 'reset-suggestions' | 'factory-reset'
-  >('none');
-
-  // JSON Import modal
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [importJsonText, setImportJsonText] = useState('');
-  const [importError, setImportError] = useState<string | null>(null);
-
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    setToastNotice({ message, type });
-    setTimeout(() => setToastNotice(null), 3800);
-  };
-
-  // 1. PASSCODE VALIDATION HANDLER
-  const handlePasscodeSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-
-    if (passcodeInput.trim() === MASTER_ADMIN_PASSCODE) {
-      setAuthError(null);
-      setLocalAuth(true);
-      if (propOnAuthenticate) propOnAuthenticate(true);
-      showToast('প্রবেশাধিকার অনুমোদিত! মাস্টার ড্যাশবোর্ডে স্বাগতম।', 'success');
-      setPasscodeInput('');
-    } else {
-      setAuthError('ভুল পাসওয়ার্ড! প্রবেশাধিকার সংরক্ষিত।');
-      showToast('ভুল পাসওয়ার্ড! প্রবেশাধিকার সংরক্ষিত।', 'error');
-      setShakeAnimation(true);
-      setTimeout(() => setShakeAnimation(false), 600);
-    }
-  };
-
-  // 2. LOGOUT / LOCK PANEL HANDLER
-  const handleLockPanel = () => {
-    setLocalAuth(false);
-    if (propOnAuthenticate) propOnAuthenticate(false);
-    if (propOnLockPanel) propOnLockPanel();
-    setPasscodeInput('');
-    setAuthError(null);
-    setSelectedStudentDetail(null);
-    showToast('মাস্টার অ্যাডমিন প্যানেল সফলভাবে লক করা হয়েছে।', 'info');
-  };
-
-  // 3. COMPILE CURRENT LOGGED-IN USER RECORD (LIVE DATA)
-  const currentStudentMonitoringRecord: StudentMonitoringRecord = useMemo(() => {
-    let totalChaptersCount = 0;
-    let completedChaptersCount = 0;
-
-    const selectedChaptersGrouped = activeSubjects.map((subject) => {
-      const subjectChapters = subject.chapters.map((ch) => {
-        totalChaptersCount++;
-        const prog = userState.chapters[ch.id];
-        const isCompleted = prog?.status === 'completed' || prog?.status === 'revised';
-        if (isCompleted) completedChaptersCount++;
-
-        return {
-          id: ch.id,
-          title: ch.name,
-          status: prog?.status || 'not_started',
-          bookReading: Boolean(prog?.bookReading),
-          cqPractice: Boolean(prog?.cqPractice),
-          mcqPractice: Boolean(prog?.mcqPractice),
-        };
-      });
-
-      return {
-        subjectName: subject.name,
-        chapters: subjectChapters,
-      };
-    });
-
-    const progressPercent = totalChaptersCount > 0 ? Math.round((completedChaptersCount / totalChaptersCount) * 100) : 0;
-
-    return {
-      id: 'current-active-user',
-      isCurrentUser: true,
-      name: userState.profile.name || 'মো: সাইমন হাসান',
-      school: userState.profile.school || 'কুমিল্লা জিলা স্কুল',
-      sscBatch: userState.profile.sscBatch || 'SSC 2028',
-      classLevel: userState.profile.classLevel || 'নবম শ্রেণী (Class 9)',
-      group: userState.profile.group || 'বিজ্ঞান (Science)',
-      religion: userState.profile.religion || 'ইসলাম',
-      district: userState.profile.district || 'কুমিল্লা',
-      progressPercent,
-      selectedChapters: selectedChaptersGrouped,
-    };
-  }, [userState, activeSubjects]);
-
-  // 4. MOCK PEER SCHOOL RECORDS (To demonstrate full institution monitoring across Bangladesh)
-  const peerSchoolRecords: StudentMonitoringRecord[] = useMemo(() => [
-    {
-      id: 'peer-user-1',
-      name: 'তানভীর আহমেদ',
-      school: 'ঢাকা রেসিডেনসিয়াল মডেল কলেজ',
-      sscBatch: 'SSC 2028',
-      classLevel: 'নবম শ্রেণী (Class 9)',
-      group: 'বিজ্ঞান (Science)',
-      religion: 'ইসলাম',
-      district: 'ঢাকা',
-      progressPercent: 78,
-      selectedChapters: [
-        {
-          subjectName: 'পদার্থবিজ্ঞান',
-          chapters: [
-            { id: 'phy-1', title: 'ভৌত রাশি ও পরিমাপ', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'phy-2', title: 'গতি', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'phy-3', title: 'বল', status: 'in_progress', bookReading: true, cqPractice: true, mcqPractice: false },
-          ]
-        },
-        {
-          subjectName: 'রসায়ন',
-          chapters: [
-            { id: 'chem-1', title: 'রসায়নের ধারণা', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'chem-2', title: 'পদার্থের অবস্থা', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: false },
-            { id: 'chem-3', title: 'পদার্থের গঠন', status: 'in_progress', bookReading: true, cqPractice: false, mcqPractice: false },
-          ]
-        },
-        {
-          subjectName: 'উচ্চতর গণিত',
-          chapters: [
-            { id: 'hmath-1', title: 'সেট ও ফাংশন', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'hmath-2', title: 'বীজগাণিতিক রাশি', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-          ]
-        }
-      ]
-    },
-    {
-      id: 'peer-user-2',
-      name: 'ফারহানা ইয়াসমিন',
-      school: 'ভিকারুননিসা নূন স্কুল অ্যান্ড কলেজ',
-      sscBatch: 'SSC 2028',
-      classLevel: 'দশম শ্রেণী (Class 10)',
-      group: 'বিজ্ঞান (Science)',
-      religion: 'ইসলাম',
-      district: 'ঢাকা',
-      progressPercent: 86,
-      selectedChapters: [
-        {
-          subjectName: 'জীববিজ্ঞান',
-          chapters: [
-            { id: 'bio-1', title: 'জীবন পাঠ', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'bio-2', title: 'জীবকোষ ও টিস্যু', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'bio-4', title: 'জীবনীশক্তি', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-          ]
-        },
-        {
-          subjectName: 'সাধারণ গণিত',
-          chapters: [
-            { id: 'gmath-1', title: 'বাস্তব সংখ্যা', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'gmath-2', title: 'সেট ও ফাংশন', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'gmath-3', title: 'বীজগাণিতিক রাশি', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-          ]
-        }
-      ]
-    },
-    {
-      id: 'peer-user-3',
-      name: 'সৌম্যদীপ রায়',
-      school: 'চট্টগ্রাম কলেজিয়েট স্কুল',
-      sscBatch: 'SSC 2028',
-      classLevel: 'নবম শ্রেণী (Class 9)',
-      group: 'ব্যবসায় শিক্ষা (Business Studies)',
-      religion: 'হিন্দু',
-      district: 'চট্টগ্রাম',
-      progressPercent: 62,
-      selectedChapters: [
-        {
-          subjectName: 'হিসাববিজ্ঞান',
-          chapters: [
-            { id: 'acc-1', title: 'হিসাববিজ্ঞানের পরিচিতি', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'acc-2', title: 'লেনদেন', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'acc-3', title: 'দুতরফা দাখিলা পদ্ধতি', status: 'in_progress', bookReading: true, cqPractice: false, mcqPractice: false },
-          ]
-        },
-        {
-          subjectName: 'ফিন্যান্স ও ব্যাংকিং',
-          chapters: [
-            { id: 'fin-1', title: 'অর্থায়ন ও ব্যবসায় অর্থায়ন', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'fin-2', title: 'অর্থের সময়মূল্য', status: 'in_progress', bookReading: true, cqPractice: false, mcqPractice: false },
-          ]
-        }
-      ]
-    },
-    {
-      id: 'peer-user-4',
-      name: 'আরিফুল ইসলাম',
-      school: 'রাজশাহী কলেজিয়েট স্কুল',
-      sscBatch: 'SSC 2028',
-      classLevel: 'দশম শ্রেণী (Class 10)',
-      group: 'মানবিক (Humanities)',
-      religion: 'ইসলাম',
-      district: 'রাজশাহী',
-      progressPercent: 68,
-      selectedChapters: [
-        {
-          subjectName: 'ইতিহাস ও বিশ্বসভ্যতা',
-          chapters: [
-            { id: 'hist-1', title: 'ইতিহাস পরিচিতি', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'hist-2', title: 'বিশ্বসভ্যতা', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'hist-11', title: 'ভাষা আন্দোলন ও পরবর্তী ঘটনাপ্রবাহ', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-          ]
-        },
-        {
-          subjectName: 'পৌরনীতি ও নাগরিকতা',
-          chapters: [
-            { id: 'civ-1', title: 'পৌরনীতি ও নাগরিকতা', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'civ-2', title: 'নাগরিক ও নাগরিকতা', status: 'in_progress', bookReading: true, cqPractice: false, mcqPractice: false },
-          ]
-        }
-      ]
-    },
-    {
-      id: 'peer-user-5',
-      name: 'অনন্যা চাকমা',
-      school: 'আইডিয়াল স্কুল অ্যান্ড কলেজ, মতিঝিল',
-      sscBatch: 'SSC 2028',
-      classLevel: 'নবম শ্রেণী (Class 9)',
-      group: 'বিজ্ঞান (Science)',
-      religion: 'বৌদ্ধ',
-      district: 'ঢাকা',
-      progressPercent: 74,
-      selectedChapters: [
-        {
-          subjectName: 'পদার্থবিজ্ঞান',
-          chapters: [
-            { id: 'phy-1', title: 'ভৌত রাশি ও পরিমাপ', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'phy-2', title: 'গতি', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-          ]
-        },
-        {
-          subjectName: 'রসায়ন',
-          chapters: [
-            { id: 'chem-1', title: 'রসায়নের ধারণা', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: true },
-            { id: 'chem-2', title: 'পদার্থের অবস্থা', status: 'completed', bookReading: true, cqPractice: true, mcqPractice: false },
-          ]
-        }
-      ]
-    }
-  ], []);
-
-  // ALL MONITORED STUDENTS (Live User first, followed by peers)
-  const allMonitoredStudents = useMemo(() => {
-    return [currentStudentMonitoringRecord, ...peerSchoolRecords];
-  }, [currentStudentMonitoringRecord, peerSchoolRecords]);
-
-  // FILTERED MONITORED STUDENTS
-  const filteredStudents = useMemo(() => {
-    return allMonitoredStudents.filter((student) => {
-      // Search query filter (matches student name or school name)
-      const q = searchQuery.toLowerCase().trim();
-      const matchesQuery =
-        !q ||
-        student.name.toLowerCase().includes(q) ||
-        student.school.toLowerCase().includes(q) ||
-        student.district.toLowerCase().includes(q);
-
-      // Group stream filter
-      let matchesStream = true;
-      if (streamFilter === 'science') matchesStream = student.group.includes('বিজ্ঞান') || student.group.includes('Science');
-      else if (streamFilter === 'business') matchesStream = student.group.includes('ব্যবসায়') || student.group.includes('Business');
-      else if (streamFilter === 'humanities') matchesStream = student.group.includes('মানবিক') || student.group.includes('Humanities');
-
-      return matchesQuery && matchesStream;
-    });
-  }, [allMonitoredStudents, searchQuery, streamFilter]);
-
-  // 5. EXPORT USER DATA SUMMARY (Download JSON & Copy Text)
-  const handleExportAllUserData = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {
-      const summaryPayload = {
-        exportedAt: new Date().toISOString(),
-        systemName: 'SSC Master Platform - Master Admin Monitoring Report',
-        activeStudentLiveRecord: currentStudentMonitoringRecord,
-        allMonitoredStudentsSummary: allMonitoredStudents.map((s) => ({
-          name: s.name,
-          school: s.school,
-          batch: s.sscBatch,
-          class: s.classLevel,
-          group: s.group,
-          religion: s.religion,
-          overallProgressPercent: `${s.progressPercent}%`,
-          totalSelectedChaptersCount: s.selectedChapters.reduce((acc, sub) => acc + sub.chapters.length, 0),
-          selectedChaptersBreakdown: s.selectedChapters.map((sub) => ({
-            subject: sub.subjectName,
-            chapters: sub.chapters.map((ch) => ({
-              title: ch.title,
-              conceptClear: ch.bookReading,
-              cqSolved: ch.cqPractice,
-              mcqSolved: ch.mcqPractice,
-            })),
-          })),
-        })),
-      };
-
-      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(summaryPayload, null, 2));
-      const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute('href', dataStr);
-      downloadAnchor.setAttribute('download', `ssc_master_student_monitoring_report_${new Date().toISOString().slice(0, 10)}.json`);
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      downloadAnchor.remove();
-      showToast('শিক্ষার্থীদের ডেটা সামারি সফলভাবে JSON আকারে ডাউনলোড হয়েছে!', 'success');
-    } catch (err) {
-      console.error(err);
-      showToast('এক্সপোর্ট করতে সমস্যা হয়েছে।', 'error');
-    }
-  };
-
-  const handleCopyUserSummary = () => {
-    try {
-      let textSummary = `📋 SSC MASTER PLATFORM - STUDENT MONITORING SUMMARY\nGenerated: ${new Date().toLocaleString('bn-BD')}\n\n`;
-      allMonitoredStudents.forEach((st, idx) => {
-        textSummary += `[${idx + 1}] ${st.name} ${st.isCurrentUser ? '(বর্তমান সক্রিয় শিক্ষার্থী)' : ''}\n`;
-        textSummary += `🏫 শিক্ষাপ্রতিষ্ঠান: ${st.school}\n`;
-        textSummary += `🎓 ব্যাচ: ${st.sscBatch} | শ্রেণী: ${st.classLevel} | বিভাগ: ${st.group} | ধর্ম: ${st.religion}\n`;
-        textSummary += `📊 সামগ্রিক সিলেবাস প্রস্তুতি: ${st.progressPercent}%\n`;
-        textSummary += `📚 নির্বাচিত অধ্যায় ও টাস্ক অগ্রগতি:\n`;
-        st.selectedChapters.forEach((sub) => {
-          textSummary += `   • ${sub.subjectName}:\n`;
-          sub.chapters.forEach((ch) => {
-            textSummary += `     - ${ch.title} [বই রিডিং: ${ch.bookReading ? '✓' : '✗'}, CQ: ${ch.cqPractice ? '✓' : '✗'}, MCQ: ${ch.mcqPractice ? '✓' : '✗'}]\n`;
-          });
-        });
-        textSummary += `------------------------------------------------------------\n`;
-      });
-
-      navigator.clipboard.writeText(textSummary);
-      showToast('শিক্ষার্থীদের সারসংক্ষেপ সফলভাবে ক্লিপবোর্ডে কপি করা হয়েছে!', 'success');
+      return sessionStorage.getItem(STORAGE_KEY_ADMIN_AUTH) === 'authenticated';
     } catch {
-      showToast('ক্লিপবোর্ডে কপি করা সম্ভব হয়নি।', 'error');
+      return false;
+    }
+  });
+  const [inputPasscode, setInputPasscode] = useState('');
+  const [authError, setAuthError] = useState('');
+
+  // Active Sub-Tab in Admin Panel (Default to 'users' as requested)
+  const [activeTab, setActiveTab] = useState<AdminSubTab>('users');
+
+  // User Analytics State
+  const [usersList, setUsersList] = useState<FirebaseUserData[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState<boolean>(false);
+  const [isUsersLive, setIsUsersLive] = useState<boolean>(true);
+  const [usersError, setUsersError] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [filterProvider, setFilterProvider] = useState<'all' | 'Google' | 'Email'>('all');
+  const [filterGroup, setFilterGroup] = useState<'all' | 'science' | 'business' | 'humanities'>('all');
+
+  // Banned Devices & IPs State
+  const [bannedDevices, setBannedDevices] = useState<BannedDeviceRecord[]>([]);
+  const [bannedIps, setBannedIps] = useState<BannedIpRecord[]>([]);
+  const [isLoadingBanned, setIsLoadingBanned] = useState<boolean>(false);
+  const [banActionLoading, setBanActionLoading] = useState<string | null>(null);
+  const [banModalTarget, setBanModalTarget] = useState<FirebaseUserData | null>(null);
+  const [banReasonInput, setBanReasonInput] = useState<string>('অ্যাকাউন্টের নিরাপত্তা নিয়ম লঙ্ঘন বা সন্দেহজনক কার্যকলাপ');
+  const [statusFeedback, setStatusFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Manual ban inputs in Banned List tab
+  const [manualDevInput, setManualDevInput] = useState('');
+  const [manualIpInput, setManualIpInput] = useState('');
+  const [manualReasonInput, setManualReasonInput] = useState('ম্যানুয়াল এডমিন ব্লকলিস্ট');
+
+  // Notice form state
+  const [isNoticeActive, setIsNoticeActive] = useState<boolean>(globalNotice?.isNoticeActive ?? false);
+  const [noticeTitle, setNoticeTitle] = useState<string>(globalNotice?.title || 'জরুরি রক্ষণাবেক্ষণ ও সিস্টেম নোটিশ');
+  const [noticeMessage, setNoticeMessage] = useState<string>(
+    globalNotice?.message || 'সম্মানিত শিক্ষার্থীদের জানানো যাচ্ছে যে প্ল্যাটফর্মের জরুরি কারিগরি আপগ্রেড চলছে। শীঘ্রই সেবা স্বাভাবিক হবে।'
+  );
+  const [severity, setSeverity] = useState<'urgent' | 'warning' | 'info'>(globalNotice?.severity || 'urgent');
+
+  // Sync state for notice
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<{ type: 'idle' | 'success' | 'error'; message: string }>({
+    type: 'idle',
+    message: '',
+  });
+
+  // Keep form in sync when globalNotice changes
+  useEffect(() => {
+    if (globalNotice) {
+      setIsNoticeActive(globalNotice.isNoticeActive);
+      if (globalNotice.title) setNoticeTitle(globalNotice.title);
+      if (globalNotice.message) setNoticeMessage(globalNotice.message);
+      if (globalNotice.severity) setSeverity(globalNotice.severity);
+    }
+  }, [globalNotice]);
+
+  // Load banned lists from Firebase RTDB
+  const loadBannedLists = async () => {
+    setIsLoadingBanned(true);
+    try {
+      const res = await fetchBannedLists();
+      setBannedDevices(res.devices);
+      setBannedIps(res.ips);
+    } catch {
+      // ignore
+    } finally {
+      setIsLoadingBanned(false);
     }
   };
 
-  // -------------------------------------------------------------
-  // RENDER 1: PASSWORD MODAL & LOCK GATEWAY IF NOT AUTHENTICATED
-  // -------------------------------------------------------------
-  if (!isAuthenticated) {
-    return (
-      <div id="admin-security-gateway" className="max-w-xl mx-auto py-8 sm:py-14 px-4 font-hind">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="bg-gradient-to-b from-slate-900 via-slate-950 to-indigo-950/80 border border-purple-500/30 rounded-3xl p-6 sm:p-9 shadow-2xl relative overflow-hidden backdrop-blur-2xl text-center"
-        >
-          {/* Ambient light glow */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600/15 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-600/15 rounded-full blur-3xl pointer-events-none" />
+  // Load registered users from Firebase RTDB
+  const loadUsersFromFirebase = async () => {
+    setIsLoadingUsers(true);
+    setUsersError('');
+    try {
+      const res = await fetchAllUsersFromFirebase();
+      setUsersList(res.users);
+      setIsUsersLive(res.isLive);
+      if (res.error) {
+        setUsersError(res.error);
+      }
+    } catch (err: any) {
+      setUsersError('ইউজার ডেটা লোড করতে ব্যর্থ হয়েছে');
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
 
-          {/* Lock Icon Emblem */}
-          <div className="relative z-10 flex flex-col items-center">
-            <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-purple-600 to-indigo-600 p-0.5 shadow-xl shadow-purple-600/30 mb-4 flex items-center justify-center">
-              <div className="w-full h-full bg-slate-900 rounded-[22px] flex items-center justify-center text-purple-400">
-                <KeyRound className="w-8 h-8 text-amber-400 animate-pulse" />
-              </div>
-            </div>
+  // Helper to check if a specific user is currently banned
+  const checkIsUserBanned = (user: FirebaseUserData) => {
+    if (user.is_banned) return true;
+    const devId = user.security_info?.deviceID;
+    const ip = user.security_info?.ipAddress;
+    const isDevMatch = devId && bannedDevices.some((d) => d.deviceID === devId);
+    const isIpMatch = ip && bannedIps.some((i) => i.ipAddress === ip);
+    return Boolean(isDevMatch || isIpMatch);
+  };
 
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[10px] font-extrabold tracking-wider uppercase px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-jakarta">
-                SECURITY ACCESS CONTROL
-              </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-anek">
-                PASSCODE PROTECTED
-              </span>
-            </div>
+  // Ban action execution
+  const handleConfirmBanUser = async () => {
+    if (!banModalTarget) return;
+    const targetKey = banModalTarget.userId || banModalTarget.email;
+    setBanActionLoading(targetKey);
+    try {
+      const res = await banDeviceAndIp(banModalTarget, banReasonInput);
+      if (res.success) {
+        setStatusFeedback({
+          type: 'success',
+          message: `✓ ${banModalTarget.name} এর ডিভাইস ও আইপি সফলভাবে ব্লক করা হয়েছে!`,
+        });
+        setBanModalTarget(null);
+        await Promise.all([loadUsersFromFirebase(), loadBannedLists()]);
+      } else {
+        setStatusFeedback({
+          type: 'error',
+          message: res.error || 'ব্লক সম্পন্ন করতে ব্যর্থ হয়েছে।',
+        });
+      }
+    } catch (err: any) {
+      setStatusFeedback({
+        type: 'error',
+        message: err?.message || 'ব্লক সম্পন্ন করতে ব্যর্থ হয়েছে।',
+      });
+    } finally {
+      setBanActionLoading(null);
+    }
+  };
 
-            <h2 className="text-xl sm:text-2xl font-black text-white font-jakarta tracking-tight">
-              মাস্টার অ্যাডমিন লগইন
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-300 mt-2 max-w-sm leading-relaxed">
-              সিস্টেম মনিটরিং, সকল শিক্ষার্থীর ডেটা ট্র্যাকিং এবং কারিকুলাম কন্ট্রোল অ্যাক্সেস করতে অ্যাডমিন পাসকোড লিখুন।
-            </p>
+  // Unban user action
+  const handleUnbanUser = async (user: FirebaseUserData) => {
+    const key = user.userId || user.email;
+    setBanActionLoading(key);
+    try {
+      const res = await unbanUserAll(user);
+      if (res.success) {
+        setStatusFeedback({
+          type: 'success',
+          message: `✓ ${user.name} এর ডিভাইস ও আইপি সফলভাবে আনব্যান করা হয়েছে!`,
+        });
+        await Promise.all([loadUsersFromFirebase(), loadBannedLists()]);
+      } else {
+        setStatusFeedback({
+          type: 'error',
+          message: res.error || 'আনব্যান সম্পন্ন করতে সমস্যা হয়েছে।',
+        });
+      }
+    } catch (err: any) {
+      setStatusFeedback({
+        type: 'error',
+        message: err?.message || 'আনব্যান সম্পন্ন করতে সমস্যা হয়েছে।',
+      });
+    } finally {
+      setBanActionLoading(null);
+    }
+  };
 
-            {/* Passcode Input Form */}
-            <form onSubmit={handlePasscodeSubmit} className="w-full mt-6 space-y-4">
-              <div
-                className={`relative transition-transform ${
-                  shakeAnimation ? 'animate-bounce text-rose-500 ring-2 ring-rose-500' : ''
-                }`}
-              >
-                <div className="relative">
-                  <input
-                    type={showPasswordText ? 'text' : 'password'}
-                    value={passcodeInput}
-                    onChange={(e) => {
-                      setPasscodeInput(e.target.value);
-                      if (authError) setAuthError(null);
-                    }}
-                    placeholder="অ্যাডমিন পাসকোড দিন..."
-                    autoFocus
-                    className="w-full px-4 py-3.5 pl-11 pr-12 rounded-2xl bg-slate-950/80 border border-white/15 text-white placeholder-slate-500 text-sm font-mono tracking-widest focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30 transition-all shadow-inner text-center"
-                  />
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                    <Lock className="w-4 h-4 text-purple-400" />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowPasswordText(!showPasswordText)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                  >
-                    {showPasswordText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
+  // Direct unban single device
+  const handleUnbanDeviceDirect = async (deviceId: string) => {
+    setBanActionLoading(deviceId);
+    try {
+      const res = await unbanDevice(deviceId);
+      if (res.success) {
+        setStatusFeedback({
+          type: 'success',
+          message: `✓ ডিভাইস (${deviceId}) সফলভাবে আনব্যান করা হয়েছে!`,
+        });
+        await Promise.all([loadUsersFromFirebase(), loadBannedLists()]);
+      }
+    } finally {
+      setBanActionLoading(null);
+    }
+  };
 
-              {/* Error Alert Display */}
-              <AnimatePresence>
-                {authError && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-bold flex items-center justify-center gap-2"
-                  >
-                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                    <span>{authError}</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+  // Direct unban single IP
+  const handleUnbanIpDirect = async (ipAddress: string) => {
+    setBanActionLoading(ipAddress);
+    try {
+      const res = await unbanIp(ipAddress);
+      if (res.success) {
+        setStatusFeedback({
+          type: 'success',
+          message: `✓ আইপি (${ipAddress}) সফলভাবে আনব্যান করা হয়েছে!`,
+        });
+        await Promise.all([loadUsersFromFirebase(), loadBannedLists()]);
+      }
+    } finally {
+      setBanActionLoading(null);
+    }
+  };
 
-              {/* Submit Button */}
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                type="submit"
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold text-sm shadow-xl shadow-purple-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all font-jakarta"
-              >
-                <Unlock className="w-4 h-4 text-amber-300" />
-                <span>মাস্টার প্যানেলে প্রবেশ করুন (Unlock Admin)</span>
-              </motion.button>
-            </form>
+  // Manual device ban
+  const handleManualDeviceBan = async () => {
+    if (!manualDevInput.trim()) return;
+    setBanActionLoading('manual_dev');
+    try {
+      const dummyUser: FirebaseUserData = {
+        name: 'ম্যানুয়াল এন্ট্রি',
+        email: 'manual@admin.block',
+        provider: 'Email',
+        batch: 'SSC 2028',
+        group: 'প্রশাসনিক',
+        created_at: new Date().toISOString(),
+        total_study_minutes: 0,
+        streak_count: 0,
+        last_login: new Date().toISOString(),
+        security_info: {
+          deviceID: manualDevInput.trim(),
+          ipAddress: '0.0.0.0',
+        },
+      };
+      await banDeviceAndIp(dummyUser, manualReasonInput || 'ম্যানুয়াল অ্যাডমিন ব্লকলিস্ট');
+      setManualDevInput('');
+      setStatusFeedback({ type: 'success', message: '✓ ডিভাইস সফলভাবে ব্লকলিস্টে যোগ করা হয়েছে!' });
+      await Promise.all([loadUsersFromFirebase(), loadBannedLists()]);
+    } finally {
+      setBanActionLoading(null);
+    }
+  };
 
-            <div className="mt-5 text-[11px] text-slate-500 flex items-center justify-center gap-1.5 font-anek">
-              <ShieldAlert className="w-3.5 h-3.5 text-purple-400" />
-              <span>নিরাপত্তা নীতি: অননুমোদিত প্রবেশাধিকার সম্পূর্ণরূপে সংরক্ষিত।</span>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
+  // Manual IP ban
+  const handleManualIpBan = async () => {
+    if (!manualIpInput.trim()) return;
+    setBanActionLoading('manual_ip');
+    try {
+      const dummyUser: FirebaseUserData = {
+        name: 'ম্যানুয়াল এন্ট্রি',
+        email: 'manual@admin.block',
+        provider: 'Email',
+        batch: 'SSC 2028',
+        group: 'প্রশাসনিক',
+        created_at: new Date().toISOString(),
+        total_study_minutes: 0,
+        streak_count: 0,
+        last_login: new Date().toISOString(),
+        security_info: {
+          deviceID: 'DEV-MANUAL-BLOCK',
+          ipAddress: manualIpInput.trim(),
+        },
+      };
+      await banDeviceAndIp(dummyUser, manualReasonInput || 'ম্যানুয়াল অ্যাডমিন ব্লকলিস্ট');
+      setManualIpInput('');
+      setStatusFeedback({ type: 'success', message: '✓ আইপি সফলভাবে ব্লকলিস্টে যোগ করা হয়েছে!' });
+      await Promise.all([loadUsersFromFirebase(), loadBannedLists()]);
+    } finally {
+      setBanActionLoading(null);
+    }
+  };
 
-  // -------------------------------------------------------------
-  // RENDER 2: MASTER ADMIN DASHBOARD (ONCE AUTHENTICATED)
-  // -------------------------------------------------------------
+  // Trigger loading data when authenticated and open
+  useEffect(() => {
+    if (isOpen && isAuthenticated) {
+      loadUsersFromFirebase();
+      loadBannedLists();
+    }
+  }, [isOpen, isAuthenticated]);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    if (inputPasscode.trim() === MASTER_ADMIN_PASSCODE) {
+      setIsAuthenticated(true);
+      try {
+        sessionStorage.setItem(STORAGE_KEY_ADMIN_AUTH, 'authenticated');
+      } catch {
+        // ignore
+      }
+      loadUsersFromFirebase();
+    } else {
+      setAuthError('ভুল পাসকোড! সঠিক মাস্টার পাসওয়ার্ড দিন।');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setInputPasscode('');
+    try {
+      sessionStorage.removeItem(STORAGE_KEY_ADMIN_AUTH);
+    } catch {
+      // ignore
+    }
+  };
+
+  // Dispatch PUT to Firebase RTDB for Broadcast Notice
+  const handleBroadcastUpdate = async (activeState: boolean) => {
+    setIsSyncing(true);
+    setSyncStatus({ type: 'idle', message: '' });
+
+    const payload: Partial<GlobalNoticeData> = {
+      isNoticeActive: activeState,
+      title: noticeTitle.trim(),
+      message: noticeMessage.trim(),
+      severity,
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'Master Admin (1919131514)',
+    };
+
+    const res = await updateGlobalNotice(payload, MASTER_ADMIN_PASSCODE);
+
+    setIsSyncing(false);
+    if (res.success && res.data) {
+      setIsNoticeActive(activeState);
+      onNoticeUpdatedLocally(res.data);
+      setSyncStatus({
+        type: 'success',
+        message: activeState 
+          ? '✓ Firebase RTDB-তে ইমার্জেন্সি ব্রডকাস্ট লক সক্রিয় ও সিঙ্ক হয়েছে!' 
+          : '✓ ব্রডকাস্ট লক প্রত্যাহার করা হয়েছে এবং Firebase আপডেট সম্পন্ন!',
+      });
+    } else {
+      setSyncStatus({
+        type: 'error',
+        message: res.error || 'Firebase RTDB আপডেট করতে ত্রুটি ঘটেছে।',
+      });
+    }
+  };
+
+  // Metrics calculation for Syllabi
+  const totalChapters = subjects.reduce((acc, s) => acc + s.chapters.length, 0);
+  const completedChaptersCount = Object.values(chapterProgress).filter(
+    (c) => c.status === 'completed' || c.status === 'revised'
+  ).length;
+  const overallProgressPercentage = calculateTotalProgress(subjects, chapterProgress);
+
+  // Helper: Check if date is today
+  const isDateToday = (dateStr: string) => {
+    if (!dateStr) return false;
+    try {
+      const d = new Date(dateStr);
+      const today = new Date();
+      return (
+        d.getDate() === today.getDate() &&
+        d.getMonth() === today.getMonth() &&
+        d.getFullYear() === today.getFullYear()
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  // User analytics metrics
+  const totalRegisteredUsers = usersList.length;
+  const activeTodayCount = usersList.filter((u) => isDateToday(u.last_login)).length;
+  const googleUsersCount = usersList.filter((u) => u.provider === 'Google').length;
+  const emailUsersCount = usersList.filter((u) => u.provider === 'Email').length;
+
+  // Filtered Users List
+  const filteredUsers = useMemo(() => {
+    return usersList.filter((user) => {
+      const query = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !query ||
+        user.name.toLowerCase().includes(query) ||
+        user.email.toLowerCase().includes(query);
+
+      const matchesProvider =
+        filterProvider === 'all' || user.provider === filterProvider;
+
+      const groupLower = (user.group || '').toLowerCase();
+      let matchesGroup = true;
+      if (filterGroup === 'science') {
+        matchesGroup = groupLower.includes('বিজ্ঞান') || groupLower.includes('science');
+      } else if (filterGroup === 'business') {
+        matchesGroup = groupLower.includes('ব্যবসায়') || groupLower.includes('business') || groupLower.includes('commerce');
+      } else if (filterGroup === 'humanities') {
+        matchesGroup = groupLower.includes('মানবিক') || groupLower.includes('arts') || groupLower.includes('humanities');
+      }
+
+      return matchesSearch && matchesProvider && matchesGroup;
+    });
+  }, [usersList, searchQuery, filterProvider, filterGroup]);
+
+  // Format date helper
+  const formatDateBn = (dateStr: string) => {
+    if (!dateStr) return 'অজানা';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('bn-BD', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // Format relative time helper
+  const formatRelativeTimeBn = (dateStr: string) => {
+    if (!dateStr) return 'অজানা';
+    try {
+      const d = new Date(dateStr);
+      const diffMs = Date.now() - d.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMins / 60);
+
+      if (diffMins < 5) return 'এইমাত্র সক্রিয়';
+      if (diffMins < 60) return `${toBengaliNumber(diffMins)} মি. আগে`;
+      if (diffHours < 24) return `${toBengaliNumber(diffHours)} ঘণ্টা আগে`;
+      return formatDateBn(dateStr);
+    } catch {
+      return dateStr;
+    }
+  };
+
+  if (!isOpen) return null;
+
   return (
-    <div id="master-admin-dashboard" className="space-y-6 font-hind">
-      
-      {/* 1. TOP MASTER ADMIN BAR WITH LOCK PANEL / LOGOUT */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950/90 border border-purple-500/30 rounded-3xl p-5 sm:p-7 shadow-2xl relative overflow-hidden backdrop-blur-xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/30">
-                <ShieldCheck className="w-5 h-5" />
-              </span>
-              <span className="text-[11px] font-extrabold tracking-wider uppercase px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-jakarta flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                MASTER ADMIN ACCESS GRANTED
-              </span>
-              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-anek">
-                SSC 2028 MONITORING ENGINE
-              </span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md overflow-y-auto transform-gpu">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="relative w-full max-w-4xl rounded-3xl bg-[#0D111D] border border-white/10 shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col font-hind text-slate-100"
+      >
+        {/* Top Header */}
+        <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between bg-slate-950/90 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-emerald-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+              <ShieldCheck className="w-6 h-6 text-emerald-400" />
             </div>
-
-            <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight font-jakarta">
-              মাস্টার অ্যাডমিন ও শিক্ষার্থী ট্র্যাকিং ড্যাশবোর্ড
-            </h2>
-
-            <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
-              সারাদেশের শিক্ষাপ্রতিষ্ঠান অনুযায়ী শিক্ষার্থীদের সিলেবাস সমাপ্তি, নির্বাচিত অধ্যায় তালিকা এবং Concept Clear (📘), CQ (✍️), MCQ (🔘) টাস্কের রিয়েল-টাইম পর্যবেক্ষণ।
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base sm:text-lg font-bold text-white font-jakarta">
+                  MASTER ADMIN CONTROL & ANALYTICS
+                </h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/30 font-anek">
+                  {isAuthenticated ? 'AUTHENTICATED' : 'PASSCODE PROTECTED'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-anek">
+                Firebase Realtime Database লাইভ ইউজার অ্যানালিটিক্স ও সিস্টেম কন্ট্রোল
+              </p>
+            </div>
           </div>
 
-          {/* Admin Header Action Controls (Lock Panel / Logout & Export) */}
-          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+          <div className="flex items-center gap-2">
+            {isAuthenticated && (
+              <button
+                onClick={handleLogout}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer font-anek"
+              >
+                লগআউট
+              </button>
+            )}
             <button
-              type="button"
-              id="admin-btn-export-data"
-              onClick={handleExportAllUserData}
-              className="px-4 py-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 hover:text-white text-xs font-bold font-jakarta flex items-center gap-2 shadow-lg transition-all cursor-pointer"
+              onClick={onClose}
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
             >
-              <Download className="w-4 h-4 text-cyan-400" />
-              <span>এক্সপোর্ট ডেটা (JSON)</span>
-            </button>
-
-            <button
-              type="button"
-              id="admin-btn-copy-summary"
-              onClick={handleCopyUserSummary}
-              className="px-4 py-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-purple-500/40 text-purple-300 hover:text-white text-xs font-bold font-jakarta flex items-center gap-2 shadow-lg transition-all cursor-pointer"
-            >
-              <Copy className="w-4 h-4 text-purple-400" />
-              <span>কপি সামারি</span>
-            </button>
-
-            {/* Lock Panel (লগ আউট) Button */}
-            <button
-              type="button"
-              id="admin-btn-lock-panel"
-              onClick={handleLockPanel}
-              className="px-4 py-2.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 border border-rose-500/40 text-rose-300 hover:text-white text-xs font-bold font-jakarta flex items-center gap-2 shadow-lg shadow-rose-900/20 transition-all cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>লগ আউট (Lock Panel)</span>
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Global Toast Alert */}
-        <AnimatePresence>
-          {toastNotice && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className={`mt-4 p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
-                toastNotice.type === 'success'
-                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200'
-                  : toastNotice.type === 'error'
-                  ? 'bg-rose-500/20 border-rose-500/40 text-rose-200'
-                  : 'bg-indigo-500/20 border-indigo-500/40 text-indigo-200'
-              }`}
-            >
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>{toastNotice.message}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+        {/* Scrollable Content */}
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
+          {!isAuthenticated ? (
+            /* Passcode Verification Card */
+            <div className="p-6 sm:p-8 rounded-3xl bg-[#151C2C] border border-amber-500/30 text-center max-w-md mx-auto my-8">
+              <div className="w-16 h-16 rounded-3xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto mb-4">
+                <KeyRound className="w-8 h-8" />
+              </div>
+              <h4 className="text-base font-bold text-white mb-1 font-jakarta">
+                ENTER MASTER ADMIN PASSCODE
+              </h4>
+              <p className="text-xs text-slate-400 mb-5 font-anek">
+                লাইভ ইউজার অ্যানালিটিক্স ও ব্রডকাস্ট সিস্টেমে প্রবেশের জন্য মাস্টার পাসকোড দিন
+              </p>
 
-      {/* 2. ADMIN NAVIGATION TABS SWITCHER */}
-      <div className="flex items-center gap-3 border-b border-white/10 pb-2">
-        <button
-          type="button"
-          onClick={() => setActiveAdminView('monitoring')}
-          className={`px-4 py-2.5 rounded-2xl text-xs font-bold font-jakarta flex items-center gap-2 transition-all cursor-pointer ${
-            activeAdminView === 'monitoring'
-              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30'
-              : 'bg-slate-900/60 border border-white/5 text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Users className="w-4 h-4 text-cyan-300" />
-          <span>শিক্ষার্থী ও বিদ্যালয় ট্র্যাকিং (STUDENT & SCHOOL MONITORING)</span>
-          <span className="ml-1.5 px-2 py-0.5 rounded-full bg-white/15 text-white text-[10px]">
-            {filteredStudents.length} জন
-          </span>
-        </button>
+              <form onSubmit={handleLogin} className="space-y-4 text-left">
+                <div>
+                  <input
+                    type="password"
+                    autoFocus
+                    placeholder="পাসওয়ার্ড দিন"
+                    value={inputPasscode}
+                    onChange={(e) => {
+                      setInputPasscode(e.target.value);
+                      setAuthError('');
+                    }}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  />
+                  {authError && (
+                    <p className="text-xs text-rose-400 mt-2 text-center font-anek flex items-center justify-center gap-1">
+                      <AlertOctagon className="w-3.5 h-3.5" />
+                      <span>{authError}</span>
+                    </p>
+                  )}
+                </div>
 
-        <button
-          type="button"
-          onClick={() => setActiveAdminView('controls')}
-          className={`px-4 py-2.5 rounded-2xl text-xs font-bold font-jakarta flex items-center gap-2 transition-all cursor-pointer ${
-            activeAdminView === 'controls'
-              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30'
-              : 'bg-slate-900/60 border border-white/5 text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Sliders className="w-4 h-4 text-amber-300" />
-          <span>কারিকুলাম ও স্টেট কন্ট্রোল (SYSTEM STATE CONTROLS)</span>
-        </button>
-      </div>
-
-      {/* ============================================================= */}
-      {/* VIEW 1: USER DATA & SCHOOL MONITORING DASHBOARD               */}
-      {/* ============================================================= */}
-      {activeAdminView === 'monitoring' && (
-        <div className="space-y-6">
-          
-          {/* SEARCH & FILTER CONTROLS BAR */}
-          <div className="bg-slate-900/80 rounded-3xl border border-white/10 p-5 backdrop-blur-xl shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
-            
-            {/* Search Input */}
-            <div className="relative w-full md:w-96">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="শিক্ষার্থীর নাম বা বিদ্যালয়ের নাম খুঁজুন..."
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-white/10 rounded-2xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40"
-              />
-              {searchQuery && (
                 <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
+                  type="submit"
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-500 hover:opacity-95 text-white font-bold text-xs shadow-lg shadow-indigo-500/25 transition-all cursor-pointer"
                 >
-                  ✕
+                  প্রবেশ করুন (Authenticate)
                 </button>
-              )}
+              </form>
             </div>
-
-            {/* Stream Filter Badges */}
-            <div className="flex items-center gap-2 flex-wrap w-full md:w-auto">
-              <span className="text-xs text-slate-400 flex items-center gap-1 font-jakarta">
-                <Filter className="w-3.5 h-3.5 text-purple-400" /> বিভাগ ফিল্টার:
-              </span>
-              {[
-                { id: 'all', label: 'সকল' },
-                { id: 'science', label: 'বিজ্ঞান' },
-                { id: 'business', label: 'ব্যবসায় শিক্ষা' },
-                { id: 'humanities', label: 'মানবিক' },
-              ].map((filter) => (
-                <button
-                  key={filter.id}
-                  type="button"
-                  onClick={() => setStreamFilter(filter.id as any)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                    streamFilter === filter.id
-                      ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                      : 'bg-slate-950/60 border border-white/5 text-slate-400 hover:text-slate-200'
+          ) : (
+            /* Authenticated Admin Dashboard */
+            <>
+              {/* Feedback status banner */}
+              {statusFeedback && (
+                <div
+                  className={`p-3 rounded-2xl border text-xs font-anek font-bold flex items-center justify-between transition-all ${
+                    statusFeedback.type === 'success'
+                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                      : 'bg-rose-500/20 border-rose-500/40 text-rose-300'
                   }`}
                 >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
-
-          </div>
-
-          {/* ACTIVE STUDENT PROMINENT MONITORING CARD */}
-          <div className="bg-gradient-to-r from-purple-950/40 via-slate-900/90 to-indigo-950/40 border border-purple-500/30 rounded-3xl p-5 sm:p-6 backdrop-blur-xl shadow-xl relative overflow-hidden">
-            <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-                <span className="text-xs font-bold text-emerald-300 font-jakarta uppercase tracking-wider">
-                  বর্তমান সক্রিয় শিক্ষার্থী (LIVE USER ACTIVE MONITORING)
-                </span>
-              </div>
-              <span className="text-xs font-mono font-bold px-3 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                সিলেবাস সমাপ্তি: {currentStudentMonitoringRecord.progressPercent}%
-              </span>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <User className="w-4 h-4 text-purple-400" />
-                  {currentStudentMonitoringRecord.name}
-                </h3>
-                <p className="text-xs text-slate-300 flex items-center gap-1.5 mt-1">
-                  <School className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                  <span className="font-semibold text-cyan-200">{currentStudentMonitoringRecord.school}</span>
-                </p>
-                <div className="text-[11px] text-slate-400 mt-1 font-anek">
-                  {currentStudentMonitoringRecord.district} জেলা • ধর্ম: {currentStudentMonitoringRecord.religion}
+                  <div className="flex items-center gap-2">
+                    {statusFeedback.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertOctagon className="w-4 h-4 text-rose-400 shrink-0" />
+                    )}
+                    <span>{statusFeedback.message}</span>
+                  </div>
+                  <button
+                    onClick={() => setStatusFeedback(null)}
+                    className="text-white/60 hover:text-white ml-3 p-1 rounded-lg hover:bg-white/10"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-              </div>
+              )}
 
-              <div>
-                <span className="text-xs text-slate-400 block mb-1">ব্যাচ ও শ্রেণী:</span>
-                <span className="text-xs font-bold text-white px-2.5 py-1 rounded-xl bg-slate-800 border border-white/5">
-                  {currentStudentMonitoringRecord.sscBatch} • {currentStudentMonitoringRecord.classLevel}
-                </span>
-                <div className="text-xs text-purple-300 font-semibold mt-1.5">
-                  {currentStudentMonitoringRecord.group}
-                </div>
-              </div>
-
-              <div>
-                <span className="text-xs text-slate-400 block mb-1">সিলেবাস কভারেজ বার:</span>
-                <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
-                  <div
-                    className="bg-gradient-to-r from-emerald-500 to-teal-400 h-2.5 rounded-full transition-all duration-500"
-                    style={{ width: `${currentStudentMonitoringRecord.progressPercent}%` }}
-                  />
-                </div>
-                <div className="text-[11px] text-slate-400 mt-1 flex justify-between">
-                  <span>অগ্রগতি</span>
-                  <span className="font-bold text-emerald-400">{currentStudentMonitoringRecord.progressPercent}%</span>
-                </div>
-              </div>
-
-              <div className="flex justify-start md:justify-end">
+              {/* Navigation Sub-Tabs */}
+              <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-950/80 border border-white/5 overflow-x-auto">
                 <button
-                  type="button"
-                  onClick={() => setSelectedStudentDetail(currentStudentMonitoringRecord)}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold font-jakarta flex items-center gap-1.5 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+                  onClick={() => setActiveTab('users')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap font-anek ${
+                    activeTab === 'users'
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-500 text-white shadow-md shadow-emerald-500/20'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
                 >
-                  <Eye className="w-3.5 h-3.5" />
-                  <span>অধ্যায় ও টাস্ক বিস্তারিত দেখুন</span>
+                  <Users className="w-4 h-4" />
+                  <span>নিবন্ধিত ইউজার তথ্য (Registered Users Info)</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/20 text-white font-mono">
+                    {totalRegisteredUsers}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('banned')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap font-anek ${
+                    activeTab === 'banned'
+                      ? 'bg-gradient-to-r from-rose-600 to-red-500 text-white shadow-md shadow-rose-500/20'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Ban className="w-4 h-4 text-rose-400" />
+                  <span>ব্লকড লিস্ট (Banned List)</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/30 text-rose-200 border border-rose-500/40 font-mono font-bold">
+                    {bannedDevices.length + bannedIps.length}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('broadcast')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap font-anek ${
+                    activeTab === 'broadcast'
+                      ? 'bg-gradient-to-r from-rose-600 to-pink-500 text-white shadow-md shadow-rose-500/20'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Radio className="w-4 h-4" />
+                  <span>ইমার্জেন্সি ব্রডকাস্ট লক</span>
+                  {isNoticeActive && (
+                    <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('metrics')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap font-anek ${
+                    activeTab === 'metrics'
+                      ? 'bg-gradient-to-r from-indigo-600 to-blue-500 text-white shadow-md shadow-indigo-500/20'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Database className="w-4 h-4" />
+                  <span>সিলেবাস ও সিস্টেম কন্ট্রোল</span>
                 </button>
               </div>
-            </div>
-          </div>
 
-          {/* ALL MONITORED STUDENTS TABLE & CARDS */}
-          <div className="bg-slate-900/80 rounded-3xl border border-white/10 p-5 sm:p-7 backdrop-blur-xl shadow-xl space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <span className="p-2 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                  <School className="w-4 h-4" />
-                </span>
-                <div>
-                  <h3 className="text-base font-bold text-white font-jakarta">
-                    সারাদেশের বিদ্যালয় ও শিক্ষার্থী পর্যবেক্ষণ তালিকা ({filteredStudents.length} জন)
-                  </h3>
-                  <p className="text-xs text-slate-400 font-hind">
-                    শিক্ষাপ্রতিষ্ঠানভিত্তিক শিক্ষার্থীদের প্রোফাইল, সামগ্রিক অগ্রগতি এবং অধ্যায়ভিত্তিক টাস্ক স্ট্যাটাস
-                  </p>
+              {/* ============================================================== */}
+              {/* TAB 1: REGISTERED USERS INFO & LIVE MONITORING DASHBOARD       */}
+              {/* ============================================================== */}
+              {activeTab === 'users' && (
+                <div className="space-y-6">
+                  {/* Real-time sync endpoint indicator */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-2xl bg-slate-950/60 border border-white/5 text-xs">
+                    <div className="flex items-center gap-2 font-mono text-slate-400 truncate">
+                      <Globe className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span className="text-emerald-400 font-bold">Firebase RTDB:</span>
+                      <span className="truncate">{RTDB_USERS_ENDPOINT}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/30 text-[11px] font-bold font-anek">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" />
+                        লাইভ সিঙ্কড
+                      </span>
+                      <button
+                        onClick={loadUsersFromFirebase}
+                        disabled={isLoadingUsers}
+                        title="রিলোড করুন"
+                        className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isLoadingUsers ? 'animate-spin text-emerald-400' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Summary Cards: 4 High-Impact Metrics */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+                    {/* Card 1: Total Users Count */}
+                    <div className="p-4 rounded-2xl bg-[#151C2C] border border-emerald-500/20 shadow-lg relative overflow-hidden group">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs text-slate-400 font-anek font-semibold">
+                          মোট নিবন্ধিত ইউজার
+                        </span>
+                        <div className="w-7 h-7 rounded-xl bg-emerald-500/20 text-[#10B981] flex items-center justify-center">
+                          <Users className="w-3.5 h-3.5" />
+                        </div>
+                      </div>
+                      <div className="text-2xl sm:text-3xl font-black text-[#10B981] font-anek">
+                        {toBengaliNumber(totalRegisteredUsers)}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-1 font-anek">
+                        রেজিস্টার্ড একাউন্ট ডাটাবেস
+                      </div>
+                    </div>
+
+                    {/* Card 2: Active Today */}
+                    <div className="p-4 rounded-2xl bg-[#151C2C] border border-cyan-500/20 shadow-lg relative overflow-hidden group">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs text-slate-400 font-anek font-semibold">
+                          আজকে সক্রিয় ইউজার
+                        </span>
+                        <div className="w-7 h-7 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+                          <Flame className="w-3.5 h-3.5" />
+                        </div>
+                      </div>
+                      <div className="text-2xl sm:text-3xl font-black text-cyan-400 font-anek">
+                        {toBengaliNumber(activeTodayCount)}
+                      </div>
+                      <div className="text-[10px] text-cyan-300/80 mt-1 font-anek">
+                        আজকের সেশন লগইন অ্যাক্টিভ
+                      </div>
+                    </div>
+
+                    {/* Card 3: Google Sign-in Users */}
+                    <div className="p-4 rounded-2xl bg-[#151C2C] border border-indigo-500/20 shadow-lg relative overflow-hidden">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs text-slate-400 font-anek font-semibold">
+                          গুগল অথ ইউজার
+                        </span>
+                        <div className="w-7 h-7 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-xs font-jakarta">
+                          G
+                        </div>
+                      </div>
+                      <div className="text-2xl sm:text-3xl font-black text-indigo-400 font-anek">
+                        {toBengaliNumber(googleUsersCount)}
+                      </div>
+                      <div className="text-[10px] text-indigo-300/80 mt-1 font-anek">
+                        ১-ক্লিক গুগল প্রোভাইডার
+                      </div>
+                    </div>
+
+                    {/* Card 4: Email Registered Users */}
+                    <div className="p-4 rounded-2xl bg-[#151C2C] border border-amber-500/20 shadow-lg relative overflow-hidden">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs text-slate-400 font-anek font-semibold">
+                          ইমেইল রেজিস্টার্ড
+                        </span>
+                        <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                          <Mail className="w-3.5 h-3.5" />
+                        </div>
+                      </div>
+                      <div className="text-2xl sm:text-3xl font-black text-amber-400 font-anek">
+                        {toBengaliNumber(emailUsersCount)}
+                      </div>
+                      <div className="text-[10px] text-amber-300/80 mt-1 font-anek">
+                        ডাইরেক্ট ইমেইল ক্রেডেনশিয়াল
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Search & Filter Bar */}
+                  <div className="p-4 rounded-2xl bg-[#151C2C] border border-white/10 space-y-3">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                      {/* Search Bar Input */}
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="ইউজারের নাম অথবা ইমেইল দিয়ে সার্চ করুন..."
+                          className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-700/80 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                        />
+                        {searchQuery && (
+                          <button
+                            onClick={() => setSearchQuery('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Provider Filter */}
+                      <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/5 shrink-0 text-xs">
+                        <button
+                          onClick={() => setFilterProvider('all')}
+                          className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer font-anek ${
+                            filterProvider === 'all'
+                              ? 'bg-emerald-600 text-white font-bold'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          সব
+                        </button>
+                        <button
+                          onClick={() => setFilterProvider('Google')}
+                          className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer font-anek flex items-center gap-1 ${
+                            filterProvider === 'Google'
+                              ? 'bg-emerald-600 text-white font-bold'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <span>Google</span>
+                        </button>
+                        <button
+                          onClick={() => setFilterProvider('Email')}
+                          className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer font-anek flex items-center gap-1 ${
+                            filterProvider === 'Email'
+                              ? 'bg-emerald-600 text-white font-bold'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <span>Email</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Group Filter Pills */}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1 text-xs">
+                      <span className="text-slate-400 text-[11px] font-anek mr-1">গ্রুপ ফিল্টার:</span>
+                      {[
+                        { id: 'all', label: 'সকল বিভাগ' },
+                        { id: 'science', label: 'বিজ্ঞান (Science)' },
+                        { id: 'business', label: 'ব্যবসায় শিক্ষা' },
+                        { id: 'humanities', label: 'মানবিক' },
+                      ].map((grp) => (
+                        <button
+                          key={grp.id}
+                          onClick={() => setFilterGroup(grp.id as any)}
+                          className={`px-2.5 py-1 rounded-lg border text-[11px] transition-all cursor-pointer font-anek ${
+                            filterGroup === grp.id
+                              ? 'bg-slate-800 text-emerald-300 border-emerald-500/40 font-bold'
+                              : 'bg-slate-900/60 text-slate-400 border-white/5 hover:text-white'
+                          }`}
+                        >
+                          {grp.label}
+                        </button>
+                      ))}
+                      <span className="ml-auto text-[11px] text-slate-400 font-anek">
+                        মোট প্রদর্শিত: <strong className="text-emerald-400">{toBengaliNumber(filteredUsers.length)}</strong> জন
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Detailed User List (Cards in high-contrast dark neon #151C2C) */}
+                  <div className="space-y-3">
+                    {filteredUsers.length === 0 ? (
+                      <div className="p-8 rounded-2xl bg-[#151C2C] border border-white/5 text-center">
+                        <Users className="w-10 h-10 text-slate-600 mx-auto mb-2" />
+                        <p className="text-sm text-slate-400 font-anek">
+                          কোনো ইউজার খুঁজে পাওয়া যায়নি
+                        </p>
+                        {searchQuery && (
+                          <button
+                            onClick={() => setSearchQuery('')}
+                            className="mt-2 text-xs text-emerald-400 hover:underline font-anek"
+                          >
+                            সার্চ ক্লিয়ার করুন
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      filteredUsers.map((user, idx) => (
+                        <div
+                          key={user.userId || user.email || idx}
+                          className="p-4 sm:p-5 rounded-2xl bg-[#151C2C] border border-white/10 hover:border-emerald-500/30 transition-all shadow-md group relative"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            {/* Left: Avatar & Identity */}
+                            <div className="flex items-start sm:items-center gap-3">
+                              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0 font-jakarta">
+                                {user.name.charAt(0)}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h5 className="text-sm sm:text-base font-bold text-white font-jakarta">
+                                    {user.name}
+                                  </h5>
+                                  {/* Provider Badge */}
+                                  <span
+                                    className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                      user.provider === 'Google'
+                                        ? 'bg-[#10B981]/20 text-[#10B981] border-[#10B981]/40'
+                                        : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                                    }`}
+                                  >
+                                    {user.provider === 'Google' ? (
+                                      <>
+                                        <span className="font-black">G</span>
+                                        <span>Google</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Mail className="w-2.5 h-2.5" />
+                                        <span>Email</span>
+                                      </>
+                                    )}
+                                  </span>
+
+                                  {/* Batch Badge */}
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-white/5 font-mono">
+                                    {user.batch || 'SSC 2028'}
+                                  </span>
+                                </div>
+
+                                <div className="text-xs text-slate-400 font-mono flex items-center gap-2 mt-0.5">
+                                  <span className="text-slate-300">{user.email}</span>
+                                  <span className="w-1 h-1 rounded-full bg-slate-600" />
+                                  <span className="text-emerald-400/90 font-anek">{user.group}</span>
+                                </div>
+
+                                {/* 4th Subject & Syllabus Path Badges */}
+                                {(user.fourth_subject || user.syllabus_path) && (
+                                  <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                                    {user.fourth_subject && (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/30 font-anek">
+                                        ৪র্থ বিষয়: {user.fourth_subject}
+                                      </span>
+                                    )}
+                                    {user.syllabus_path && (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#5B50F6]/10 text-indigo-300 border border-[#5B50F6]/30 font-anek">
+                                        {user.syllabus_path}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Right: Metrics & Badges */}
+                            <div className="flex items-center gap-3 sm:gap-4 flex-wrap sm:flex-nowrap border-t sm:border-t-0 border-white/5 pt-2 sm:pt-0">
+                              {/* Total Study Time */}
+                              <div className="bg-slate-900/80 px-3 py-1.5 rounded-xl border border-white/5 text-right shrink-0">
+                                <span className="text-[10px] text-slate-400 block font-anek">
+                                  মোট অধ্যয়ন সময়
+                                </span>
+                                <span className="text-xs font-bold text-cyan-300 font-anek flex items-center gap-1 justify-end">
+                                  <Clock className="w-3 h-3 text-cyan-400" />
+                                  {formatStudyHoursBn(user.total_study_minutes)}
+                                </span>
+                              </div>
+
+                              {/* Streak Count */}
+                              <div className="bg-slate-900/80 px-3 py-1.5 rounded-xl border border-white/5 text-right shrink-0">
+                                <span className="text-[10px] text-slate-400 block font-anek">
+                                  স্ট্রিক
+                                </span>
+                                <span className="text-xs font-bold text-amber-400 font-anek flex items-center gap-1 justify-end">
+                                  <Flame className="w-3 h-3 text-amber-500 fill-amber-500" />
+                                  {toBengaliNumber(user.streak_count || 1)} দিন
+                                </span>
+                              </div>
+
+                              {/* Dates */}
+                              <div className="text-right text-[11px] text-slate-400 font-anek shrink-0 hidden md:block">
+                                <div>রেজিস্ট্রেশন: <span className="text-slate-300">{formatDateBn(user.created_at)}</span></div>
+                                <div className="text-[10px] text-slate-500">
+                                  সর্বশেষ সক্রিয়: <span className="text-emerald-400/80">{formatRelativeTimeBn(user.last_login)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* User Security & Ban Control Bar */}
+                          <div className="mt-3 pt-2.5 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                              {/* Account Status Badge */}
+                              {checkIsUserBanned(user) ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[11px] font-bold font-mono">
+                                  <Ban className="w-3 h-3 text-rose-400" />
+                                  ব্লকড (BANNED)
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold font-mono">
+                                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                                  সক্রিয় (ACTIVE)
+                                </span>
+                              )}
+
+                              {/* Device ID */}
+                              <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-mono bg-slate-900/60 px-2.5 py-1 rounded-lg border border-white/5">
+                                <Smartphone className="w-3 h-3 text-indigo-400 shrink-0" />
+                                <span className="text-slate-500">Device:</span>
+                                <span className="text-indigo-300 font-semibold truncate max-w-[130px] sm:max-w-[170px]">
+                                  {user.security_info?.deviceID || 'DEV-FALLBACK-SSC2028'}
+                                </span>
+                              </div>
+
+                              {/* IP Address */}
+                              <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-mono bg-slate-900/60 px-2.5 py-1 rounded-lg border border-white/5">
+                                <Globe className="w-3 h-3 text-cyan-400 shrink-0" />
+                                <span className="text-slate-500">IP:</span>
+                                <span className="text-cyan-300 font-semibold">
+                                  {user.security_info?.ipAddress || '103.145.118.42'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Ban / Unban Action Button */}
+                            <div className="flex items-center gap-2 self-end sm:self-auto">
+                              {checkIsUserBanned(user) ? (
+                                <button
+                                  onClick={() => handleUnbanUser(user)}
+                                  disabled={banActionLoading === (user.userId || user.email)}
+                                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold font-anek flex items-center gap-1.5 transition-all cursor-pointer hover:shadow-lg hover:shadow-emerald-950/40 disabled:opacity-50"
+                                >
+                                  <Unlock className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span>Unban / অ্যাক্সেস দিন</span>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setBanModalTarget(user);
+                                    setBanReasonInput('অ্যাকাউন্টের নিয়ম লঙ্ঘন বা সন্দেহজনক কার্যকলাপ');
+                                  }}
+                                  disabled={banActionLoading === (user.userId || user.email)}
+                                  className="px-3.5 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 text-xs font-bold font-anek flex items-center gap-1.5 transition-all cursor-pointer hover:shadow-lg hover:shadow-rose-950/40 disabled:opacity-50"
+                                >
+                                  <Ban className="w-3.5 h-3.5 text-rose-400" />
+                                  <span>Ban Device & IP</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <span className="text-xs font-mono text-slate-400">
-                প্রদর্শিত: {filteredStudents.length} / {allMonitoredStudents.length} রেকর্ড
-              </span>
-            </div>
+              {/* ============================================================== */}
+              {/* TAB 2: BLOCKED LIST (DEVICES & IPS) CONTROL DASHBOARD          */}
+              {/* ============================================================== */}
+              {activeTab === 'banned' && (
+                <div className="space-y-6">
+                  {/* Top Summary Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="p-4 rounded-2xl bg-[#151C2C] border border-rose-500/30 flex items-center justify-between">
+                      <div>
+                        <span className="text-xs text-slate-400 font-anek block">মোট ব্লকড ডিভাইস</span>
+                        <span className="text-xl font-black text-rose-400 font-mono">{bannedDevices.length} টি</span>
+                      </div>
+                      <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center border border-rose-500/20">
+                        <Smartphone className="w-5 h-5" />
+                      </div>
+                    </div>
 
-            {/* Desktop Table View */}
-            <div className="overflow-x-auto rounded-2xl border border-white/10">
-              <table className="w-full text-left text-xs text-slate-300">
-                <thead className="bg-slate-950/80 text-[11px] font-bold text-slate-400 uppercase tracking-wider font-jakarta border-b border-white/10">
-                  <tr>
-                    <th className="py-3 px-4">শিক্ষার্থীর পরিচয়</th>
-                    <th className="py-3 px-4">শিক্ষাপ্রতিষ্ঠান (School Name)</th>
-                    <th className="py-3 px-3">ব্যাচ ও বিভাগ</th>
-                    <th className="py-3 px-3 text-center">ধর্ম</th>
-                    <th className="py-3 px-4 text-center">সিলেবাস অগ্রগতি %</th>
-                    <th className="py-3 px-4 text-center">টাস্ক সারাংশ</th>
-                    <th className="py-3 px-3 text-right">অ্যাকশন</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 font-hind">
-                  {filteredStudents.map((st) => {
-                    // Calculate total Concept, CQ, MCQ across student's chapters
-                    let conceptCount = 0;
-                    let cqCount = 0;
-                    let mcqCount = 0;
-                    let totalChaps = 0;
+                    <div className="p-4 rounded-2xl bg-[#151C2C] border border-rose-500/30 flex items-center justify-between">
+                      <div>
+                        <span className="text-xs text-slate-400 font-anek block">মোট ব্লকড আইপি</span>
+                        <span className="text-xl font-black text-rose-400 font-mono">{bannedIps.length} টি</span>
+                      </div>
+                      <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center border border-rose-500/20">
+                        <Globe className="w-5 h-5" />
+                      </div>
+                    </div>
 
-                    st.selectedChapters.forEach((sub) => {
-                      sub.chapters.forEach((c) => {
-                        totalChaps++;
-                        if (c.bookReading) conceptCount++;
-                        if (c.cqPractice) cqCount++;
-                        if (c.mcqPractice) mcqCount++;
-                      });
-                    });
+                    <div className="p-4 rounded-2xl bg-[#151C2C] border border-emerald-500/30 flex items-center justify-between">
+                      <div>
+                        <span className="text-xs text-slate-400 font-anek block">ব্লকলিস্ট নিরাপত্তা স্ট্যাটাস</span>
+                        <span className="text-xs font-bold text-emerald-400 font-anek flex items-center gap-1.5 mt-1">
+                          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                          রিয়েলটাইম এনফোর্সমেন্ট সক্রিয়
+                        </span>
+                      </div>
+                      <button
+                        onClick={loadBannedLists}
+                        disabled={isLoadingBanned}
+                        className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/5 transition-all cursor-pointer"
+                        title="রিফ্রেশ করুন"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${isLoadingBanned ? 'animate-spin text-emerald-400' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
 
-                    return (
-                      <tr key={st.id} className="hover:bg-white/[0.02] transition-colors">
-                        {/* Student Name */}
-                        <td className="py-3.5 px-4 font-bold text-white">
-                          <div className="flex items-center gap-2">
-                            <span className="p-1 rounded-lg bg-indigo-500/20 text-indigo-400">
-                              <User className="w-3.5 h-3.5" />
-                            </span>
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <span>{st.name}</span>
-                                {st.isCurrentUser && (
-                                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold">
-                                    LIVE
+                  {/* Section 1: Blocked Devices Table */}
+                  <div className="p-5 rounded-3xl bg-[#151C2C] border border-white/5 space-y-4 shadow-xl">
+                    <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                      <div className="flex items-center gap-2">
+                        <Smartphone className="w-4 h-4 text-indigo-400" />
+                        <h4 className="text-sm font-bold text-white font-jakarta">
+                          ব্লকড ডিভাইসসমূহ (BLOCKED DEVICE IDs)
+                        </h4>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-mono font-bold">
+                          {bannedDevices.length}
+                        </span>
+                      </div>
+                      <span className="text-xs text-slate-400 font-mono hidden sm:inline">{RTDB_BANNED_DEVICES_ENDPOINT}</span>
+                    </div>
+
+                    {bannedDevices.length === 0 ? (
+                      <div className="py-8 text-center text-slate-400 font-anek">
+                        <CheckCircle2 className="w-8 h-8 text-emerald-400/60 mx-auto mb-2" />
+                        <p className="text-xs">বর্তমানে কোনো ডিভাইস ব্লক তালিকায় নেই। সব ডিভাইস অনুমোদিত।</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {bannedDevices.map((dev) => (
+                          <div
+                            key={dev.deviceID}
+                            className="p-3 rounded-2xl bg-slate-900/80 border border-rose-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-rose-500/40 transition-all"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-mono font-bold text-rose-300 bg-rose-950/60 px-2.5 py-0.5 rounded-md border border-rose-500/30">
+                                  {dev.deviceID}
+                                </span>
+                                {dev.user_name && (
+                                  <span className="text-xs text-slate-300 font-anek font-semibold">
+                                    {dev.user_name}
+                                  </span>
+                                )}
+                                {dev.user_email && (
+                                  <span className="text-[11px] text-slate-400 font-mono">
+                                    ({dev.user_email})
                                   </span>
                                 )}
                               </div>
-                              <span className="text-[10px] text-slate-500 font-normal font-anek">
-                                {st.district}
-                              </span>
+                              <div className="flex items-center gap-3 text-[11px] text-slate-400 font-anek flex-wrap">
+                                <span>কারণ: <span className="text-slate-300">{dev.reason || 'সন্দেহজনক কার্যকলাপ'}</span></span>
+                                <span>•</span>
+                                <span>ব্লকের সময়: <span className="text-slate-400 font-mono">{dev.banned_at ? new Date(dev.banned_at).toLocaleString('bn-BD') : 'অজানা'}</span></span>
+                              </div>
                             </div>
+
+                            <button
+                              onClick={() => handleUnbanDeviceDirect(dev.deviceID)}
+                              disabled={banActionLoading === dev.deviceID}
+                              className="px-3.5 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold font-anek flex items-center gap-1.5 transition-all cursor-pointer self-start sm:self-auto shrink-0 hover:shadow-md hover:shadow-emerald-950/40 disabled:opacity-50"
+                            >
+                              <Unlock className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Unban / অ্যাক্সেস দিন</span>
+                            </button>
                           </div>
-                        </td>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
-                        {/* School Name */}
-                        <td className="py-3.5 px-4">
-                          <span className="font-semibold text-cyan-200 flex items-center gap-1.5">
-                            <School className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                            {st.school}
-                          </span>
-                        </td>
+                  {/* Section 2: Blocked IPs Table */}
+                  <div className="p-5 rounded-3xl bg-[#151C2C] border border-white/5 space-y-4 shadow-xl">
+                    <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                      <div className="flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-cyan-400" />
+                        <h4 className="text-sm font-bold text-white font-jakarta">
+                          ব্লকড আইপি অ্যাড্রেসসমূহ (BLOCKED IP ADDRESSES)
+                        </h4>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-mono font-bold">
+                          {bannedIps.length}
+                        </span>
+                      </div>
+                      <span className="text-xs text-slate-400 font-mono hidden sm:inline">{RTDB_BANNED_IPS_ENDPOINT}</span>
+                    </div>
 
-                        {/* Batch & Group */}
-                        <td className="py-3.5 px-3">
-                          <div className="text-white font-semibold font-anek text-xs">{st.sscBatch}</div>
-                          <div className="text-[11px] text-purple-300">{st.group}</div>
-                        </td>
-
-                        {/* Religion */}
-                        <td className="py-3.5 px-3 text-center">
-                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-anek">
-                            {st.religion}
-                          </span>
-                        </td>
-
-                        {/* Progress % Bar */}
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center justify-center gap-2">
-                            <div className="w-20 bg-slate-800 rounded-full h-2 overflow-hidden">
-                              <div
-                                className="bg-gradient-to-r from-emerald-400 to-teal-400 h-2 rounded-full"
-                                style={{ width: `${st.progressPercent}%` }}
-                              />
-                            </div>
-                            <span className="font-mono font-bold text-slate-200 min-w-[34px]">
-                              {st.progressPercent}%
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Task Summary (Concept, CQ, MCQ) */}
-                        <td className="py-3.5 px-4 text-center font-mono text-[11px]">
-                          <div className="flex items-center justify-center gap-2">
-                            <span className="text-purple-300" title="Concept Clear / Book Reading">
-                              📘 {conceptCount}/{totalChaps}
-                            </span>
-                            <span className="text-cyan-300" title="Creative Question Solved">
-                              ✍️ {cqCount}/{totalChaps}
-                            </span>
-                            <span className="text-amber-300" title="Multiple Choice Solved">
-                              🔘 {mcqCount}/{totalChaps}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Action Button */}
-                        <td className="py-3.5 px-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedStudentDetail(st)}
-                            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1"
+                    {bannedIps.length === 0 ? (
+                      <div className="py-8 text-center text-slate-400 font-anek">
+                        <CheckCircle2 className="w-8 h-8 text-emerald-400/60 mx-auto mb-2" />
+                        <p className="text-xs">বর্তমানে কোনো আইপি অ্যাড্রেস ব্লক তালিকায় নেই। সব নেটওয়ার্ক অনুমোদিত।</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {bannedIps.map((ip) => (
+                          <div
+                            key={ip.ipAddress}
+                            className="p-3 rounded-2xl bg-slate-900/80 border border-rose-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-rose-500/40 transition-all"
                           >
-                            <Eye className="w-3 h-3" />
-                            <span>ডিটেইলস</span>
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-mono font-bold text-cyan-300 bg-cyan-950/60 px-2.5 py-0.5 rounded-md border border-cyan-500/30">
+                                  {ip.ipAddress}
+                                </span>
+                                {ip.user_name && (
+                                  <span className="text-xs text-slate-300 font-anek font-semibold">
+                                    {ip.user_name}
+                                  </span>
+                                )}
+                                {ip.user_email && (
+                                  <span className="text-[11px] text-slate-400 font-mono">
+                                    ({ip.user_email})
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 text-[11px] text-slate-400 font-anek flex-wrap">
+                                <span>কারণ: <span className="text-slate-300">{ip.reason || 'সন্দেহজনক নেটওয়ার্ক ট্রাফিক'}</span></span>
+                                <span>•</span>
+                                <span>ব্লকের সময়: <span className="text-slate-400 font-mono">{ip.banned_at ? new Date(ip.banned_at).toLocaleString('bn-BD') : 'অজানা'}</span></span>
+                              </div>
+                            </div>
 
-          </div>
-
-        </div>
-      )}
-
-      {/* ============================================================= */}
-      {/* VIEW 2: CURRICULUM STATE CONTROLS & RESET ACTIONS             */}
-      {/* ============================================================= */}
-      {activeAdminView === 'controls' && (
-        <div className="space-y-6">
-          
-          {/* STREAM SWITCHER */}
-          <section id="admin-stream-switcher" className="bg-slate-900/80 rounded-3xl border border-white/10 p-5 sm:p-7 backdrop-blur-xl shadow-xl space-y-5">
-            <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-white/10">
-              <div className="flex items-center gap-2.5">
-                <span className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-500/30">
-                  <Layers className="w-4 h-4" />
-                </span>
-                <div>
-                  <h3 className="text-base font-bold text-white font-jakarta">
-                    ডায়নামিক বিভাগ ও বিষয় কনফিগারেশন (SWITCH STUDENT STREAM)
-                  </h3>
-                  <p className="text-xs text-slate-400 font-hind">
-                    এখানে পরিবর্তন করলে রিয়েল-টাইমে মূল অ্যাপের সিলেবাস, রুটিন এবং প্রোগ্রেস ট্র্যাকার আপডেট হবে
-                  </p>
-                </div>
-              </div>
-
-              <span className="text-xs px-3 py-1 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-anek font-semibold">
-                বর্তমান বিভাগ: {userState.stream === 'science' ? 'বিজ্ঞান' : userState.stream === 'business' ? 'ব্যবসায় শিক্ষা' : 'মানবিক'}
-              </span>
-            </div>
-
-            {/* Stream Buttons Grid */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wide flex items-center gap-1.5 font-jakarta">
-                <Atom className="w-3.5 h-3.5 text-cyan-400" />
-                বিভাগ নির্বাচন (STREAM):
-              </label>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {STREAM_OPTIONS.map((opt) => {
-                  const isSelected = userState.stream === opt.id;
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      id={`admin-btn-stream-${opt.id}`}
-                      onClick={() => {
-                        onUpdateStream(opt.id);
-                        showToast(`বিভাগ সফলভাবে '${opt.label}' এ পরিবর্তিত হয়েছে!`, 'success');
-                      }}
-                      className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
-                        isSelected
-                          ? 'bg-gradient-to-br from-indigo-950/90 to-purple-950/80 border-indigo-500 text-white shadow-xl shadow-indigo-600/20 ring-1 ring-indigo-400/50'
-                          : 'bg-slate-950/60 border-white/5 hover:border-white/15 hover:bg-slate-950 text-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-sm text-white flex items-center gap-1.5">
-                          {opt.id === 'science' && <Atom className="w-4 h-4 text-cyan-400" />}
-                          {opt.id === 'business' && <Briefcase className="w-4 h-4 text-emerald-400" />}
-                          {opt.id === 'humanities' && <Landmark className="w-4 h-4 text-rose-400" />}
-                          {opt.label}
-                        </span>
-                        {isSelected && (
-                          <span className="p-1 rounded-full bg-indigo-500 text-white">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                          </span>
-                        )}
+                            <button
+                              onClick={() => handleUnbanIpDirect(ip.ipAddress)}
+                              disabled={banActionLoading === ip.ipAddress}
+                              className="px-3.5 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold font-anek flex items-center gap-1.5 transition-all cursor-pointer self-start sm:self-auto shrink-0 hover:shadow-md hover:shadow-emerald-950/40 disabled:opacity-50"
+                            >
+                              <Unlock className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Unban / অ্যাক্সেস দিন</span>
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                      <div className="text-[11px] text-slate-400 font-hind line-clamp-2">
-                        {opt.desc}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* 4th Subject Switcher */}
-            <div className="space-y-2 pt-3 border-t border-white/5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-300 uppercase tracking-wide flex items-center gap-1.5 font-jakarta">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  ঐচ্ছিক ৪র্থ বিষয় নির্বাচন (OPTIONAL 4TH SUBJECT):
-                </label>
-                <span className="text-[11px] text-slate-400">
-                  নির্বাচিত: {FOURTH_SUBJECT_OPTIONS.find((f) => f.id === userState.fourthSubject)?.label || 'উচ্চতর গণিত'}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                {FOURTH_SUBJECT_OPTIONS.map((f) => {
-                  const isSelected = userState.fourthSubject === f.id;
-                  return (
-                    <button
-                      key={f.id}
-                      type="button"
-                      id={`admin-btn-4th-${f.id}`}
-                      onClick={() => {
-                        onUpdateFourthSubject(f.id);
-                        showToast(`৪র্থ বিষয় '${f.label}' এ আপডেট হয়েছে!`, 'success');
-                      }}
-                      className={`p-3 rounded-2xl border text-center transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-amber-500/20 border-amber-500/50 text-amber-200 font-bold shadow-md ring-1 ring-amber-400/40'
-                          : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-slate-200 hover:bg-slate-950'
-                      }`}
-                    >
-                      <div className="text-lg mb-1">{f.icon}</div>
-                      <div className="text-xs font-bold text-white">{f.label}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">{f.chaptersCount}টি অধ্যায়</div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Religion Switcher */}
-            <div className="space-y-2 pt-3 border-t border-white/5">
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wide flex items-center gap-1.5 font-jakarta">
-                <Bookmark className="w-3.5 h-3.5 text-purple-400" />
-                ধর্ম ও নৈতিক শিক্ষা পাঠ্যবই ফিল্টার (RELIGION TEXTBOOK):
-              </label>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                {[
-                  { key: 'ইসলাম' as ReligionBn, label: 'ইসলাম ও নৈতিক শিক্ষা' },
-                  { key: 'হিন্দু' as ReligionBn, label: 'হিন্দুধর্ম ও নৈতিক শিক্ষা' },
-                  { key: 'বৌদ্ধ' as ReligionBn, label: 'বৌদ্ধধর্ম ও নৈতিক শিক্ষা' },
-                  { key: 'খ্রিস্টান' as ReligionBn, label: 'খ্রিস্টধর্ম ও নৈতিক শিক্ষা' },
-                ].map((rel) => {
-                  const isSelected = (userState.profile?.religion || 'ইসলাম') === rel.key;
-                  return (
-                    <button
-                      key={rel.key}
-                      type="button"
-                      id={`admin-btn-rel-${rel.key}`}
-                      onClick={() => {
-                        onUpdateReligion(rel.key);
-                        showToast(`ধর্ম পাঠ্যবই '${rel.label}' এ সেট করা হয়েছে!`, 'success');
-                      }}
-                      className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer text-xs font-bold ${
-                        isSelected
-                          ? 'bg-purple-600/30 border-purple-500/60 text-purple-200 shadow-md ring-1 ring-purple-400/40'
-                          : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-slate-200 hover:bg-slate-950'
-                      }`}
-                    >
-                      {rel.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-          </section>
-
-          {/* SYSTEM RESET & FACTORY RESTORE CONTROLS */}
-          <section id="admin-system-actions" className="bg-slate-900/80 rounded-3xl border border-rose-500/20 p-5 sm:p-7 backdrop-blur-xl shadow-xl space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <span className="p-2 bg-rose-500/20 text-rose-400 rounded-xl border border-rose-500/30">
-                  <ShieldAlert className="w-4 h-4" />
-                </span>
-                <div>
-                  <h3 className="text-base font-bold text-white font-jakarta">
-                    SYSTEM RESET & DATA MANAGEMENT (স্টেট রিসেট ও ডাটাবেস ব্যবস্থাপনা)
-                  </h3>
-                  <p className="text-xs text-slate-400 font-hind">
-                    প্রোগ্রেস রিসেট করা, ফুল ফ্যাক্টরি রিস্টোর এবং স্টেট ব্যাকআপ সংরক্ষণের নিয়ন্ত্রণ
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {/* Action 1: Reset Chapter Progress */}
-              <button
-                type="button"
-                id="btn-admin-reset-progress"
-                onClick={() => setConfirmModalType('reset-progress')}
-                className="p-4 rounded-2xl bg-slate-950/70 hover:bg-slate-950 border border-amber-500/30 hover:border-amber-500/60 text-left transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-2 text-amber-400 mb-1 font-bold text-xs font-jakarta">
-                  <RotateCcw className="w-4 h-4 group-hover:-rotate-90 transition-transform" />
-                  <span>পড়ার প্রোগ্রেস রিসেট</span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-snug">
-                  সকল দাগানো অধ্যায়, Concept, CQ ও MCQ অনুশীলনের মার্ক মুছে নতুন করে শুরু করুন।
-                </p>
-              </button>
-
-              {/* Action 2: Reset Suggestions */}
-              <button
-                type="button"
-                id="btn-admin-reset-suggestions"
-                onClick={() => setConfirmModalType('reset-suggestions')}
-                className="p-4 rounded-2xl bg-slate-950/70 hover:bg-slate-950 border border-purple-500/30 hover:border-purple-500/60 text-left transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-2 text-purple-400 mb-1 font-bold text-xs font-jakarta">
-                  <Sparkles className="w-4 h-4" />
-                  <span>সাজেশন টিকমার্ক রিসেট</span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-snug">
-                  দাগানো সকল প্রায়োরিটি সাজেশন টপিকের সম্পন্নতা তালিকা শূন্য করুন।
-                </p>
-              </button>
-
-              {/* Action 3: Full Factory Restore */}
-              <button
-                type="button"
-                id="btn-admin-factory-reset"
-                onClick={() => setConfirmModalType('factory-reset')}
-                className="p-4 rounded-2xl bg-rose-950/30 hover:bg-rose-950/50 border border-rose-500/40 hover:border-rose-500 text-left transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-2 text-rose-400 mb-1 font-bold text-xs font-jakarta">
-                  <AlertTriangle className="w-4 h-4" />
-                  <span>ফুল ফ্যাক্টরি রিস্টোর</span>
-                </div>
-                <p className="text-[11px] text-rose-200/80 leading-snug">
-                  প্রোফাইল, রুটিন, অধ্যায় ও কাউন্টডাউন সহ সম্পূর্ণ সিস্টেম ডিফল্টে ফেরান।
-                </p>
-              </button>
-            </div>
-          </section>
-
-        </div>
-      )}
-
-      {/* ============================================================= */}
-      {/* STUDENT DETAIL MODAL (INSPECT CHAPTERS & TASK BREAKDOWN)      */}
-      {/* ============================================================= */}
-      <AnimatePresence>
-        {selectedStudentDetail && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-slate-900 border border-purple-500/30 rounded-3xl p-6 sm:p-7 max-w-2xl w-full shadow-2xl max-h-[88vh] flex flex-col space-y-4"
-            >
-              {/* Modal Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-2xl bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                    <School className="w-5 h-5" />
+                    )}
                   </div>
-                  <div>
-                    <h4 className="text-base font-bold text-white font-jakarta flex items-center gap-2">
-                      <span>{selectedStudentDetail.name}</span>
-                      {selectedStudentDetail.isCurrentUser && (
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold font-anek">
-                          সক্রিয় শিক্ষার্থী
+
+                  {/* Section 3: Manual Block Controls */}
+                  <div className="p-5 rounded-3xl bg-slate-900/60 border border-white/5 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Ban className="w-4 h-4 text-rose-400" />
+                      <h4 className="text-xs font-bold text-white font-jakarta">
+                        ম্যানুয়াল ডিভাইস বা আইপি ব্লকলিস্টিং (MANUAL BLOCK CONTROLS)
+                      </h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Manual Device Form */}
+                      <div className="p-4 rounded-2xl bg-[#151C2C] border border-white/5 space-y-3">
+                        <span className="text-xs font-bold text-indigo-300 font-anek block">
+                          নির্দিষ্ট Device ID ব্লক করুন
                         </span>
-                      )}
-                    </h4>
-                    <p className="text-xs text-cyan-300 font-semibold font-anek flex items-center gap-1">
-                      <School className="w-3.5 h-3.5" />
-                      {selectedStudentDetail.school} ({selectedStudentDetail.district})
-                    </p>
+                        <input
+                          type="text"
+                          placeholder="DEV-XXXXXXXXX..."
+                          value={manualDevInput}
+                          onChange={(e) => setManualDevInput(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-rose-500"
+                        />
+                        <button
+                          onClick={handleManualDeviceBan}
+                          disabled={!manualDevInput.trim() || banActionLoading === 'manual_dev'}
+                          className="w-full py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 text-xs font-bold font-anek flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40"
+                        >
+                          <Ban className="w-3.5 h-3.5" />
+                          <span>ডিভাইস ব্লক করুন</span>
+                        </button>
+                      </div>
+
+                      {/* Manual IP Form */}
+                      <div className="p-4 rounded-2xl bg-[#151C2C] border border-white/5 space-y-3">
+                        <span className="text-xs font-bold text-cyan-300 font-anek block">
+                          নির্দিষ্ট IP Address ব্লক করুন
+                        </span>
+                        <input
+                          type="text"
+                          placeholder="103.xxx.xxx.xxx..."
+                          value={manualIpInput}
+                          onChange={(e) => setManualIpInput(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-rose-500"
+                        />
+                        <button
+                          onClick={handleManualIpBan}
+                          disabled={!manualIpInput.trim() || banActionLoading === 'manual_ip'}
+                          className="w-full py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 text-xs font-bold font-anek flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40"
+                        >
+                          <Ban className="w-3.5 h-3.5" />
+                          <span>আইপি ব্লক করুন</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
+              )}
 
-                <button
-                  type="button"
-                  onClick={() => setSelectedStudentDetail(null)}
-                  className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+              {/* ============================================================== */}
+              {/* TAB 2: GLOBAL EMERGENCY BROADCAST & SECURITY LOCK              */}
+              {/* ============================================================== */}
+              {activeTab === 'broadcast' && (
+                <div className="p-5 sm:p-6 rounded-3xl bg-[#151C2C] border border-rose-500/30 shadow-xl space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/5">
+                    <div className="flex items-center gap-2">
+                      <Radio className="w-5 h-5 text-rose-400 animate-pulse" />
+                      <div>
+                        <h4 className="text-sm font-bold text-white font-jakarta">
+                          FIREBASE RTDB EMERGENCY BROADCAST LOCK
+                        </h4>
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          {NOTICE_ENDPOINT}
+                        </span>
+                      </div>
+                    </div>
 
-              {/* Student Metadata Strip */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-950/60 p-3 rounded-2xl border border-white/5 text-xs text-slate-300 font-anek">
-                <div>
-                  <span className="text-[10px] text-slate-500 block">ব্যাচ:</span>
-                  <span className="font-bold text-white">{selectedStudentDetail.sscBatch}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500 block">বিভাগ:</span>
-                  <span className="font-bold text-purple-300">{selectedStudentDetail.group}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500 block">ধর্ম:</span>
-                  <span className="font-bold text-amber-300">{selectedStudentDetail.religion}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500 block">মোট অগ্রগতি:</span>
-                  <span className="font-bold text-emerald-400">{selectedStudentDetail.progressPercent}%</span>
-                </div>
-              </div>
-
-              {/* Selected Chapters Details List */}
-              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-                <div className="text-xs font-bold text-white font-jakarta flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-                    নির্বাচিত অধ্যায় ও টাস্ক অগ্রগতি (SELECTED CHAPTERS & TASKS):
-                  </span>
-                  <span className="text-[10px] text-slate-400">
-                    📘 Concept Clear • ✍️ CQ Solve • 🔘 MCQ Solve
-                  </span>
-                </div>
-
-                {selectedStudentDetail.selectedChapters.map((group, gIdx) => (
-                  <div key={gIdx} className="bg-slate-950/70 border border-white/5 rounded-2xl p-3.5 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <h5 className="text-xs font-bold text-white flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-                        <span>{group.subjectName}</span>
-                      </h5>
-                      <span className="text-[10px] text-slate-400 font-anek">
-                        {group.chapters.length}টি অধ্যায়
+                    {/* Live Lock Status Pill */}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-xs font-bold px-3 py-1 rounded-full border font-anek ${
+                          isNoticeActive
+                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
+                            : 'bg-[#10B981]/20 text-[#10B981] border-[#10B981]/40'
+                        }`}
+                      >
+                        {isNoticeActive ? '● লক সক্রিয় (LOCKED)' : '● সাধারণ মোড (NORMAL)'}
                       </span>
                     </div>
+                  </div>
 
-                    <div className="space-y-1.5">
-                      {group.chapters.map((ch) => (
-                        <div
-                          key={ch.id}
-                          className="flex items-center justify-between p-2 rounded-xl bg-slate-900/60 border border-white/5 text-xs text-slate-300"
+                  {/* Form Fields */}
+                  <div className="space-y-3.5 text-xs">
+                    <div>
+                      <label className="block text-slate-300 font-bold mb-1">
+                        নোটিশ শিরোনাম (Notice Title)
+                      </label>
+                      <input
+                        type="text"
+                        value={noticeTitle}
+                        onChange={(e) => setNoticeTitle(e.target.value)}
+                        placeholder="যেমন: জরুরি রক্ষণাবেক্ষণ ও সিস্টেম নোটিশ"
+                        className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-rose-500/40"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-300 font-bold mb-1">
+                        বিস্তারিত বার্তা (Notice Message)
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={noticeMessage}
+                        onChange={(e) => setNoticeMessage(e.target.value)}
+                        placeholder="শিক্ষার্থীদের জন্য বার্তা লিখুন..."
+                        className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-rose-500/40"
+                      />
+                    </div>
+
+                    {/* Severity level */}
+                    <div className="flex items-center gap-3">
+                      <span className="text-slate-300 font-bold">তীব্রতা (Severity):</span>
+                      {[
+                        { id: 'urgent', label: 'জরুরি (Urgent Red)', color: 'border-rose-500 text-rose-300' },
+                        { id: 'warning', label: 'সতর্কতা (Warning Amber)', color: 'border-amber-500 text-amber-300' },
+                        { id: 'info', label: 'তথ্যমূলক (Info Cyan)', color: 'border-cyan-500 text-cyan-300' },
+                      ].map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setSeverity(s.id as any)}
+                          className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
+                            severity === s.id
+                              ? 'bg-slate-800 shadow-md font-bold ring-2 ring-white/20'
+                              : 'opacity-60 hover:opacity-100'
+                          } ${s.color}`}
                         >
-                          <span className="truncate pr-2 font-medium">{ch.title}</span>
-
-                          {/* Task Breakdown Badges */}
-                          <div className="flex items-center gap-2 shrink-0 font-mono text-[11px]">
-                            {/* Concept Clear (📘) */}
-                            <span
-                              className={`px-2 py-0.5 rounded-md flex items-center gap-1 ${
-                                ch.bookReading
-                                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                                  : 'bg-slate-800 text-slate-500'
-                              }`}
-                              title="Concept Clear / Book Reading"
-                            >
-                              📘 {ch.bookReading ? '✓' : '—'}
-                            </span>
-
-                            {/* CQ Practice (✍️) */}
-                            <span
-                              className={`px-2 py-0.5 rounded-md flex items-center gap-1 ${
-                                ch.cqPractice
-                                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                                  : 'bg-slate-800 text-slate-500'
-                              }`}
-                              title="Creative Question Practice"
-                            >
-                              ✍️ {ch.cqPractice ? '✓' : '—'}
-                            </span>
-
-                            {/* MCQ Practice (🔘) */}
-                            <span
-                              className={`px-2 py-0.5 rounded-md flex items-center gap-1 ${
-                                ch.mcqPractice
-                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                  : 'bg-slate-800 text-slate-500'
-                              }`}
-                              title="Multiple Choice Practice"
-                            >
-                              🔘 {ch.mcqPractice ? '✓' : '—'}
-                            </span>
-                          </div>
-                        </div>
+                          {s.label}
+                        </button>
                       ))}
                     </div>
+
+                    {/* Sync status alert */}
+                    {syncStatus.message && (
+                      <div
+                        className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+                          syncStatus.type === 'success'
+                            ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+                            : 'bg-rose-950/40 border-rose-500/30 text-rose-300'
+                        }`}
+                      >
+                        {syncStatus.type === 'success' ? <Check className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                        <span>{syncStatus.message}</span>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+                      <button
+                        type="button"
+                        disabled={isSyncing}
+                        onClick={() => handleBroadcastUpdate(true)}
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-600/30 flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
+                      >
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>{isSyncing ? 'সিঙ্ক হচ্ছে...' : 'লক সক্রিয় করুন (Activate Broadcast Lock)'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isSyncing}
+                        onClick={() => handleBroadcastUpdate(false)}
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
+                      >
+                        <Unlock className="w-3.5 h-3.5" />
+                        <span>{isSyncing ? 'সিঙ্ক হচ্ছে...' : 'লক প্রত্যাহার করুন (Deactivate Lock)'}</span>
+                      </button>
+                    </div>
                   </div>
-                ))}
+                </div>
+              )}
+
+              {/* ============================================================== */}
+              {/* TAB 3: SYLLABUS STATUS, STREAM SWITCHER & DATA RESET           */}
+              {/* ============================================================== */}
+              {activeTab === 'metrics' && (
+                <div className="space-y-6">
+                  {/* System Metrics */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Database className="w-4 h-4 text-cyan-400" />
+                      <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider font-jakarta">
+                        TOTAL SYLLABUS & STUDENT PROGRESS METRICS
+                      </h4>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="p-4 rounded-2xl bg-[#151C2C] border border-white/5 text-center">
+                        <div className="text-2xl sm:text-3xl font-black text-cyan-400 font-anek">
+                          {toBengaliNumber(subjects.length)}
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-1 font-anek">
+                          মোট সক্রিয় বিষয় (Syllabi)
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-2xl bg-[#151C2C] border border-white/5 text-center">
+                        <div className="text-2xl sm:text-3xl font-black text-indigo-400 font-anek">
+                          {toBengaliNumber(totalChapters)}
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-1 font-anek">
+                          মোট নির্ধারিত অধ্যায়
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-2xl bg-[#151C2C] border border-white/5 text-center">
+                        <div className="text-2xl sm:text-3xl font-black text-[#10B981] font-anek">
+                          {toBengaliNumber(completedChaptersCount)}
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-1 font-anek">
+                          পড়া সম্পন্ন অধ্যায়
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-2xl bg-[#151C2C] border border-white/5 text-center">
+                        <div className="text-2xl sm:text-3xl font-black text-amber-400 font-anek">
+                          {toBengaliNumber(overallProgressPercentage)}%
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-1 font-anek">
+                          সামগ্রিক অগ্রগতি রেট
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dynamic Stream Switching & State Reset */}
+                  <div className="p-5 rounded-2xl bg-[#151C2C] border border-white/5 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h5 className="text-xs font-bold text-white font-jakarta">
+                          DYNAMIC STREAM SWITCHER (বিভাগ পরিবর্তন)
+                        </h5>
+                        <p className="text-[11px] text-slate-400">
+                          বিজ্ঞান, ব্যবসায় শিক্ষা বা মানবিক বিভাগে এক ক্লিকে সুইচ করুন
+                        </p>
+                      </div>
+
+                      {/* Stream buttons */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {[
+                          { id: 'science' as StreamKey, label: 'বিজ্ঞান (Science)' },
+                          { id: 'business' as StreamKey, label: 'ব্যবসায় শিক্ষা' },
+                          { id: 'humanities' as StreamKey, label: 'মানবিক (Humanities)' },
+                        ].map((st) => (
+                          <button
+                            key={st.id}
+                            onClick={() => onStreamChange(st.id)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer font-anek ${
+                              currentStream === st.id
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                            }`}
+                          >
+                            {st.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h5 className="text-xs font-bold text-rose-300 font-jakarta">
+                          SYSTEM DATA RESET
+                        </h5>
+                        <p className="text-[11px] text-slate-400">
+                          সকল পড়ার অগ্রগতি ও সাজেশন রিসেট করুন (প্রোফাইল অক্ষুণ্ণ থাকবে)
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          if (window.confirm('আপনি কি নিশ্চিত যে সকল অগ্রগতি রিসেট করতে চান?')) {
+                            onResetProgress();
+                          }
+                        }}
+                        className="px-4 py-2 rounded-xl bg-rose-950/50 hover:bg-rose-900/60 text-rose-300 border border-rose-500/30 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>প্রোগ্রেস স্টেট রিসেট করুন</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Ban Confirmation Modal */}
+        {banModalTarget && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md p-6 rounded-3xl bg-[#151C2C] border border-rose-500/40 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center gap-3 pb-3 border-b border-white/5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+                  <Ban className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white font-jakarta">
+                    CONFIRM BAN: DEVICE & IP
+                  </h4>
+                  <p className="text-xs text-rose-300 font-anek">
+                    ডিভাইস ও আইপি তাৎক্ষণিক অ্যাক্সেস ব্লক করুন
+                  </p>
+                </div>
               </div>
 
-              {/* Modal Footer */}
-              <div className="flex items-center justify-end pt-3 border-t border-white/10">
+              <div className="space-y-2.5 text-xs text-slate-300">
+                <div className="p-3 rounded-2xl bg-slate-900/80 border border-white/5 space-y-1.5 font-mono">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 font-anek">শিক্ষার্থী:</span>
+                    <span className="text-white font-semibold">{banModalTarget.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 font-anek">ইমেইল:</span>
+                    <span className="text-cyan-300 truncate max-w-[200px]">{banModalTarget.email}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 font-anek">Device ID:</span>
+                    <span className="text-indigo-300 truncate max-w-[180px]">
+                      {banModalTarget.security_info?.deviceID || 'DEV-FALLBACK-SSC2028'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 font-anek">IP Address:</span>
+                    <span className="text-emerald-300">
+                      {banModalTarget.security_info?.ipAddress || '103.145.118.42'}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1 font-anek">
+                    ব্লক করার কারণ (Reason for Ban)
+                  </label>
+                  <input
+                    type="text"
+                    value={banReasonInput}
+                    onChange={(e) => setBanReasonInput(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-anek focus:outline-none focus:ring-1 focus:ring-rose-500"
+                    placeholder="ব্লকের সুনির্দিষ্ট কারণ লিখুন..."
+                  />
+                </div>
+
+                <p className="text-[11px] text-slate-400 font-anek bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
+                  ⚠️ এই ব্যবহারকারীর ডিভাইস ও আইপি Firebase RTDB-র <code className="text-rose-300">/banned_devices</code> এবং <code className="text-rose-300">/banned_ips</code> নোডে যুক্ত হবে এবং তাৎক্ষণিকভাবে অ্যাপ অ্যাক্সেস ব্লক হবে।
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedStudentDetail(null)}
-                  className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-colors cursor-pointer"
+                  onClick={() => setBanModalTarget(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold font-anek transition-colors cursor-pointer"
                 >
-                  বন্ধ করুন
+                  বাতিল করুন
+                </button>
+                <button
+                  type="button"
+                  disabled={banActionLoading !== null}
+                  onClick={handleConfirmBanUser}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold font-anek flex items-center gap-1.5 shadow-lg shadow-rose-600/30 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Ban className="w-3.5 h-3.5" />
+                  <span>{banActionLoading ? 'ব্লক হচ্ছে...' : 'কনফার্ম ব্লক (Ban Now)'}</span>
                 </button>
               </div>
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
-
-      {/* ============================================================= */}
-      {/* CONFIRMATION RESET MODALS                                     */}
-      {/* ============================================================= */}
-      {confirmModalType !== 'none' && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-slate-900 border border-white/15 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-4"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="text-base font-bold text-white font-jakarta">
-                  {confirmModalType === 'reset-progress' && 'পড়ার প্রোগ্রেস রিসেট নিশ্চিতকরণ'}
-                  {confirmModalType === 'reset-suggestions' && 'সাজেশন মার্ক রিসেট নিশ্চিতকরণ'}
-                  {confirmModalType === 'factory-reset' && 'ফুল ফ্যাক্টরি রিস্টোর নিশ্চিতকরণ'}
-                </h4>
-                <p className="text-xs text-slate-400">এই অ্যাকশনটি সাবধানে সম্পন্ন করুন</p>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-300 leading-relaxed font-hind">
-              {confirmModalType === 'reset-progress' &&
-                'আপনার সকল বিষয়ের দাগানো পড়ার অগ্রগতি, Concept, CQ ও MCQ টিকমার্ক মুছে যাবে। প্রোফাইলের নাম, ধর্ম ও বিভাগ অক্ষুণ্ণ থাকবে। আপনি কি নিশ্চিত?'}
-              {confirmModalType === 'reset-suggestions' &&
-                'আপনার দাগানো সকল বিষয়ের সাজেশন সম্পন্নতার তালিকা শূন্য হয়ে যাবে। আপনি কি নিশ্চিত?'}
-              {confirmModalType === 'factory-reset' &&
-                'সতর্কতা: এটি সম্পূর্ণ ডেটাবেস ডিফল্ট অবস্থায় ফিরিয়ে আনবে। আপনার নাম, বিদ্যালয়, রুটিন এবং সকল প্রস্তুতি ডেটা রিসেট হবে।'}
-            </p>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setConfirmModalType('none')}
-                className="px-4 py-2 rounded-xl border border-slate-700 text-slate-300 text-xs font-semibold hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                বাতিল করুন
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirmModalType === 'reset-progress') {
-                    onResetProgress();
-                    showToast('অধ্যায়ের পড়ার অগ্রগতি সফলভাবে রিসেট হয়েছে।', 'success');
-                  } else if (confirmModalType === 'reset-suggestions') {
-                    onResetSuggestions();
-                    showToast('সাজেশনের সব টিকমার্ক সফলভাবে মুছে ফেলা হয়েছে।', 'success');
-                  } else if (confirmModalType === 'factory-reset') {
-                    onFactoryReset();
-                    showToast('সিস্টেম ফ্যাক্টরি রিস্টোর সম্পন্ন হয়েছে।', 'success');
-                  }
-                  setConfirmModalType('none');
-                }}
-                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30 transition-colors cursor-pointer"
-              >
-                হ্যাঁ, সম্পন্ন করুন
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
+      </motion.div>
     </div>
   );
 };

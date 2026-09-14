@@ -11,63 +11,93 @@
       "category": "compulsory",
       "sections": [
         {
-          "title": "গদ্য",
+          "title": "গদ্য (১৫টি)",
           "chapters": [
             { "id": "b1_g1", "name": "গদ্য: শুভা", "author": "রবীন্দ্রনাথ ঠাকুর", "type": "গদ্য" },
             { "id": "b1_g2", "name": "গদ্য: বই পড়া", "author": "প্রমথ চৌধুরী", "type": "গদ্য" },
-            { "id": "b1_g3", "name": "গদ্য: আম-আটির ভেঁপু", "author": "বিভূতিভূষণ বন্দ্যোপাধ্যায়", "type": "গদ্য" },
-            { "id": "b1_g4", "name": "গদ্য: মানুষ মুহম্মদ (স:)", "author": "মোহাম্মদ ওয়াজেদ আলী", "type": "গদ্য" },
+            { "id": "b1_g3", "name": "গদ্য: আম-আঁটির ভেঁপু", "author": "বিভূতিভূষণ বন্দ্যোপাধ্যায়", "type": "গদ্য" },
+            { "id": "b1_g4", "name": "গদ্য: মানুষ মুহম্মদ (স.)", "author": "মোহাম্মদ ওয়াজেদ আলী", "type": "গদ্য" },
             { "id": "b1_g5", "name": "গদ্য: নিমগাছ", "author": "বনফুল (বলাইচাঁদ মুখোপাধ্যায়)", "type": "গদ্য" },
             { "id": "b1_g6", "name": "গদ্য: শিক্ষা ও মনুষ্যত্ব", "author": "মোতাহের হোসেন চৌধুরী", "type": "গদ্য" },
             { "id": "b1_g7", "name": "গদ্য: প্রবাস বন্ধু", "author": "সৈয়দ মুজতবা আলী", "type": "গদ্য" },
             { "id": "b1_g8", "name": "গদ্য: মমতাদি", "author": "মানিক বন্দ্যোপাধ্যায়", "type": "গদ্য" },
-            { "id": "b1_g9", "name": "গদ্য: ৭১ এর দিনগুলি", "author": "জাহানারা ইমাম", "type": "গদ্য" },
-            { "id": "b1_g10", "name": "গদ্য: সাহিত্যের রূপ ও রীতি", "author": "হায়াৎ মামুদ", "type": "গদ্য" }
+            { "id": "b1_g9", "name": "গদ্য: একাত্তরের দিনগুলি", "author": "জাহানারা ইমাম", "type": "গদ্য" },
+            { "id": "b1_g10", "name": "গদ্য: সাহিত্যের রূপ ও রীতি", "author": "হায়াৎ মামুদ", "type": "গদ্য" },
+            { "id": "b1_g11", "name": "গদ্য: অভাগীর স্বর্গ", "author": "শরৎচন্দ্র চট্টোপাধ্যায়", "type": "গদ্য" },
+            { "id": "b1_g12", "name": "গদ্য: পল্লীসাহিত্য", "author": "মুহম্মদ শহীদুল্লাহ্", "type": "গদ্য" },
+            { "id": "b1_g13", "name": "গদ্য: উপেক্ষিত শক্তির উদ্বোধন", "author": "কাজী নজরুল ইসলাম", "type": "গদ্য" },
+            { "id": "b1_g14", "name": "গদ্য: ৭১-এর দিনগুলি", "author": "জাহানারা ইমাম", "type": "গদ্য" },
+            { "id": "b1_g15", "name": "গদ্য: নিয়তি", "author": "হুমায়ূন আহমেদ", "type": "গদ্য" }
           ]
         },
         {
-          "title": "পদ্য",
+          "title": "পদ্য (১৫টি)",
           "chapters": [
             { "id": "b1_p1", "name": "পদ্য: বঙ্গবাণী", "author": "আবদুল হাকিম", "type": "পদ্য" },
             { "id": "b1_p2", "name": "পদ্য: কপোতাক্ষ নদ", "author": "মাইকেল মধুসূদন দত্ত", "type": "পদ্য" },
             { "id": "b1_p3", "name": "পদ্য: জীবন-সংগীত", "author": "হেমচন্দ্র বন্দ্যোপাধ্যায়", "type": "পদ্য" },
             { "id": "b1_p4", "name": "পদ্য: জুতা-আবিष्कार", "author": "রবীন্দ্রনাথ ঠাকুর", "type": "পদ্য" },
-            { "id": "b1_p5", "name": "পদ্য: ঝরনার গান", "author": "সত্যেন্দ্রনাথ দত্ত", "type": "পদ্য" },
-            { "id": "b1_p6", "name": "পদ্য: মানুষ", "author": "কাজী নজরুল ইসলাম", "type": "পদ্য" },
-            { "id": "b1_p7", "name": "পদ্য: সেই দিন এই মাঠ", "author": "জীবনানন্দ দাশ", "type": "পদ্য" },
-            { "id": "b1_p8", "name": "পদ্য: তোমাকে পাওয়ার জন্য হে স্বাধীনতা", "author": "শামসুর রাহমান", "type": "পদ্য" },
-            { "id": "b1_p9", "name": "পদ্য: আমার পরিচয়", "author": "সৈয়দ শামসুল হক", "type": "পদ্য" },
-            { "id": "b1_p10", "name": "পদ্য: স্বাধীনতা এ শব্দটি কিভাবে আমাদের হলো", "author": "নির্মলেন্দু গুণ", "type": "পদ্য" }
+            { "id": "b1_p5", "name": "পদ্য: মানুষ", "author": "কাজী নজরুল ইসলাম", "type": "পদ্য" },
+            { "id": "b1_p6", "name": "পদ্য: সেই দিন এই মাঠ", "author": "জীবনানন্দ দাশ", "type": "পদ্য" },
+            { "id": "b1_p7", "name": "পদ্য: পল্লীজননী", "author": "জসীমউদ্দীন", "type": "পদ্য" },
+            { "id": "b1_p8", "name": "পদ্য: আশা", "author": "সিকদার আমিনুল হক", "type": "পদ্য" },
+            { "id": "b1_p9", "name": "পদ্য: তোমাকে পাওয়ার জন্য হে স্বাধীনতা", "author": "শামসুর রাহমান", "type": "পদ্য" },
+            { "id": "b1_p10", "name": "পদ্য: স্বাধীনতা এই শব্দটি কীভাবে আমাদের হলো", "author": "নির্মলেন্দু গুণ", "type": "পদ্য" },
+            { "id": "b1_p11", "name": "পদ্য: ঝরনার গান", "author": "সত্যেন্দ্রনাথ দত্ত", "type": "পদ্য" },
+            { "id": "b1_p12", "name": "পদ্য: রানার", "author": "সুকান্ত ভট্টাচার্য", "type": "পদ্য" },
+            { "id": "b1_p13", "name": "পদ্য: তোমাকে পাওয়ার জন্য", "author": "শামসুর রাহমান", "type": "পদ্য" },
+            { "id": "b1_p14", "name": "পদ্য: আমি কোন আগন্তুক নই", "author": "আহসান হাবীব", "type": "পদ্য" },
+            { "id": "b1_p15", "name": "পদ্য: সাহসী জননী বাংলা", "author": "কামাল চৌধুরী", "type": "পদ্য" }
+          ]
+        },
+        {
+          "title": "সহপাঠ (উপন্যাস ও নাটক)",
+          "chapters": [
+            { "id": "b1_s1", "name": "সহপাঠ: কাকতাড়ুয়া (উপন্যাস)", "author": "সেলিনা হোসেন", "type": "সহপাঠ" },
+            { "id": "b1_s2", "name": "সহপাঠ: বহিপীর (নাটক)", "author": "সৈয়দ ওয়ালীউল্লাহ", "type": "সহপাঠ" }
           ]
         }
       ],
       "chapters": [
         { "id": "b1_g1", "name": "গদ্য: শুভা" },
         { "id": "b1_g2", "name": "গদ্য: বই পড়া" },
-        { "id": "b1_g3", "name": "গদ্য: আম-আটির ভেঁপু" },
-        { "id": "b1_g4", "name": "গদ্য: মানুষ মুহম্মদ (স:)" },
+        { "id": "b1_g3", "name": "গদ্য: আম-আঁটির ভেঁপু" },
+        { "id": "b1_g4", "name": "গদ্য: মানুষ মুহম্মদ (স.)" },
         { "id": "b1_g5", "name": "গদ্য: নিমগাছ" },
         { "id": "b1_g6", "name": "গদ্য: শিক্ষা ও মনুষ্যত্ব" },
         { "id": "b1_g7", "name": "গদ্য: প্রবাস বন্ধু" },
         { "id": "b1_g8", "name": "গদ্য: মমতাদি" },
-        { "id": "b1_g9", "name": "গদ্য: ৭১ এর দিনগুলি" },
+        { "id": "b1_g9", "name": "গদ্য: একাত্তরের দিনগুলি" },
         { "id": "b1_g10", "name": "গদ্য: সাহিত্যের রূপ ও রীতি" },
+        { "id": "b1_g11", "name": "গদ্য: অভাগীর স্বর্গ" },
+        { "id": "b1_g12", "name": "গদ্য: পল্লীসাহিত্য" },
+        { "id": "b1_g13", "name": "গদ্য: উপেক্ষিত শক্তির উদ্বোধন" },
+        { "id": "b1_g14", "name": "গদ্য: ৭১-এর দিনগুলি" },
+        { "id": "b1_g15", "name": "গদ্য: নিয়তি" },
         { "id": "b1_p1", "name": "পদ্য: বঙ্গবাণী" },
         { "id": "b1_p2", "name": "পদ্য: কপোতাক্ষ নদ" },
         { "id": "b1_p3", "name": "পদ্য: জীবন-সংগীত" },
         { "id": "b1_p4", "name": "পদ্য: জুতা-আবিष्कार" },
-        { "id": "b1_p5", "name": "পদ্য: ঝরনার গান" },
-        { "id": "b1_p6", "name": "পদ্য: মানুষ" },
-        { "id": "b1_p7", "name": "পদ্য: সেই দিন এই মাঠ" },
-        { "id": "b1_p8", "name": "পদ্য: তোমাকে পাওয়ার জন্য হে স্বাধীনতা" },
-        { "id": "b1_p9", "name": "পদ্য: আমার পরিচয়" },
-        { "id": "b1_p10", "name": "পদ্য: স্বাধীনতা এ শব্দটি কিভাবে আমাদের হলো" }
+        { "id": "b1_p5", "name": "পদ্য: মানুষ" },
+        { "id": "b1_p6", "name": "পদ্য: সেই দিন এই মাঠ" },
+        { "id": "b1_p7", "name": "পদ্য: পল্লীজননী" },
+        { "id": "b1_p8", "name": "পদ্য: আশা" },
+        { "id": "b1_p9", "name": "পদ্য: তোমাকে পাওয়ার জন্য হে স্বাধীনতা" },
+        { "id": "b1_p10", "name": "পদ্য: স্বাধীনতা এই শব্দটি কীভাবে আমাদের হলো" },
+        { "id": "b1_p11", "name": "পদ্য: ঝরনার গান" },
+        { "id": "b1_p12", "name": "পদ্য: রানার" },
+        { "id": "b1_p13", "name": "পদ্য: তোমাকে পাওয়ার জন্য" },
+        { "id": "b1_p14", "name": "পদ্য: আমি কোন আগন্তুক নই" },
+        { "id": "b1_p15", "name": "পদ্য: সাহসী জননী বাংলা" },
+        { "id": "b1_s1", "name": "সহপাঠ: কাকতাড়ুয়া (উপন্যাস)" },
+        { "id": "b1_s2", "name": "সহপাঠ: বহিপীর (নাটক)" }
       ],
       "suggestions": [
-        { "topic": "শুভা ও নিমগাছ গদ্যের মূলভাব ও সৃজনশীল", "priority": "⭐️⭐️⭐️" },
-        { "topic": "বঙ্গবাণী ও মানুষ কবিতার ভাবসম্প্রসারণ ও অনুধাবন", "priority": "⭐️⭐️⭐️" },
-        { "topic": "তোমাকে পাওয়ার জন্য হে স্বাধীনতা ও ৭১ এর দিনগুলি", "priority": "⭐️⭐️⭐️" },
-        { "topic": "শিক্ষা ও মনুষ্যত্ব এবং বই পড়া", "priority": "⭐️⭐️" }
+        { "topic": "শুভা, নিমগাছ ও শিক্ষা ও মনুষ্যত্ব গদ্যের মূলভাব ও সৃজনশীল", "priority": "⭐️⭐️⭐️" },
+        { "topic": "বঙ্গবাণী, কপোতাক্ষ নদ ও মানুষ কবিতার ভাবসম্প্রসারণ ও অনুধাবন", "priority": "⭐️⭐️⭐️" },
+        { "topic": "তোমাকে পাওয়ার জন্য হে স্বাধীনতা ও একাত্তরের দিনগুলি", "priority": "⭐️⭐️⭐️" },
+        { "topic": "কাকতাড়ুয়া উপন্যাসের বুধা চরিত্র ও বহিপীর নাটকের তাহেরা চরিত্র", "priority": "⭐️⭐️⭐️" },
+        { "topic": "বই পড়া ও পল্লীসাহিত্য প্রবন্ধের বিশ্লেষণ", "priority": "⭐️⭐️" }
       ]
     },
     {
@@ -77,70 +107,87 @@
       "code": "102",
       "category": "compulsory",
       "chapters": [
-        { "id": "b2_1", "name": "১ম অধ্যায়: ভাষা ও ব্যাকরণ" },
-        { "id": "b2_2", "name": "২য় অধ্যায়: ধ্বনিতত্ত্ব" },
-        { "id": "b2_3", "name": "৩য় অধ্যায়: সন্ধি" },
-        { "id": "b2_4", "name": "৪র্থ অধ্যায়: শব্দরূপ" },
-        { "id": "b2_5", "name": "৫ম অধ্যায়: সমাস" },
-        { "id": "b2_6", "name": "৬ষ্ঠ অধ্যায়: উপসর্গ" },
-        { "id": "b2_7", "name": "৭ম অধ্যায়: প্রত্যয়" },
-        { "id": "b2_8", "name": "৮ম অধ্যায়: কারক ও বিভক্তি" },
-        { "id": "b2_9", "name": "৯ম অধ্যায়: বাক্য প্রকরণ" },
-        { "id": "b2_10", "name": "১০ম অধ্যায়: উক্তি পরিবর্তন" },
-        { "id": "b2_11", "name": "১১শ অধ্যায়: বিরাম চিহ্ন" }
+        { "id": "b2_1", "name": "১ম অধ্যায়: ভাষা ও বাংলা ভাষা" },
+        { "id": "b2_2", "name": "২য় অধ্যায়: বাংলা ব্যাকরণ ও এর আলোচ্য বিষয়" },
+        { "id": "b2_3", "name": "৩য় অধ্যায়: ধ্বনিতত্ত্ব ও বর্ণ" },
+        { "id": "b2_4", "name": "৪র্থ অধ্যায়: ণ-ত্ব ও ষ-ত্ব বিধান" },
+        { "id": "b2_5", "name": "৫ম অধ্যায়: সন্ধি" },
+        { "id": "b2_6", "name": "৬ষ্ঠ অধ্যায়: দ্বিরুক্ত শব্দ ও সংখ্যাবাচক শব্দ" },
+        { "id": "b2_7", "name": "৭ম অধ্যায়: উপসর্গ ও অনুসর্গ" },
+        { "id": "b2_8", "name": "৮ম অধ্যায়: সমাস" },
+        { "id": "b2_9", "name": "৯ম অধ্যায়: কৃৎ ও তদ্ধিত প্রত্যয়" },
+        { "id": "b2_10", "name": "১০ম অধ্যায়: শব্দরূপ ও পদ প্রকরণ" },
+        { "id": "b2_11", "name": "১১শ অধ্যায়: কারক ও বিভক্তি" },
+        { "id": "b2_12", "name": "১২শ অধ্যায়: বাক্য প্রকরণ ও গঠনরীতি" },
+        { "id": "b2_13", "name": "১৩শ অধ্যায়: বাচ্য ও উক্তি পরিবর্তন" },
+        { "id": "b2_14", "name": "১৪শ অধ্যায়: বিরামচিহ্ন ও প্রয়োগ" },
+        { "id": "b2_15", "name": "১৫শ অধ্যায়: বাগধারা ও প্রবাদ-প্রবচন" },
+        { "id": "b2_16", "name": "১৬শ অধ্যায়: ভাবসম্প্রসারণ ও অনুচ্ছেদ রচনা" }
       ],
       "suggestions": [
-        { "topic": "সমাস ও সন্ধির নিয়মাবলী", "priority": "⭐️⭐️⭐️" },
-        { "topic": "কারক ও বিভক্তি নির্ণয়", "priority": "⭐️⭐️⭐️" },
-        { "topic": "উপসর্গ ও প্রত্যয় যোগে শব্দ গঠন", "priority": "⭐️⭐️⭐️" },
-        { "topic": "উক্তি পরিবর্তন ও বাক্য প্রকরণ", "priority": "⭐️⭐️" }
+        { "topic": "সমাস ও সন্ধির নিয়মাবলী ও নির্ণয়", "priority": "⭐️⭐️⭐️" },
+        { "topic": "কারক ও বিভক্তি নির্ণয়", "priority": "⭐️⭐️⭐️" },
+        { "topic": "ণ-ত্ব ও ষ-ত্ব বিধানের নিয়ম", "priority": "⭐️⭐️⭐️" },
+        { "topic": "উপসর্গ ও প্রত্যয়যোগে শব্দ গঠন", "priority": "⭐️⭐️⭐️" },
+        { "topic": "উক্তি পরিবর্তন ও বাক্য রূপান্তর", "priority": "⭐️⭐️" }
       ]
     },
     {
-      "id": "eng",
-      "name": "English 1st & 2nd Paper",
-      "enName": "English 1st & 2nd Paper",
-      "code": "107/108",
+      "id": "eng1",
+      "name": "ইংরেজি ১ম পত্র",
+      "enName": "English 1st Paper",
+      "code": "107",
       "category": "compulsory",
-      "sections": [
-        {
-          "title": "Reading",
-          "chapters": [
-            { "id": "eng_r1", "name": "Reading: Father of the Nation", "type": "Reading" },
-            { "id": "eng_r2", "name": "Reading: Environment & Nature", "type": "Reading" },
-            { "id": "eng_r3", "name": "Reading: Events & Festivals", "type": "Reading" },
-            { "id": "eng_r4", "name": "Reading: Educational Skills", "type": "Reading" }
-          ]
-        },
-        {
-          "title": "Grammar",
-          "chapters": [
-            { "id": "eng_g1", "name": "Grammar: Tag Questions", "type": "Grammar" },
-            { "id": "eng_g2", "name": "Grammar: Suffix-Prefix", "type": "Grammar" },
-            { "id": "eng_g3", "name": "Grammar: Right Form of Verbs", "type": "Grammar" },
-            { "id": "eng_g4", "name": "Grammar: Connectors", "type": "Grammar" },
-            { "id": "eng_g5", "name": "Grammar: Changing Sentences", "type": "Grammar" },
-            { "id": "eng_g6", "name": "Grammar: Prepositions", "type": "Grammar" }
-          ]
-        }
-      ],
       "chapters": [
-        { "id": "eng_r1", "name": "Reading: Father of the Nation" },
-        { "id": "eng_r2", "name": "Reading: Environment & Nature" },
-        { "id": "eng_r3", "name": "Reading: Events & Festivals" },
-        { "id": "eng_r4", "name": "Reading: Educational Skills" },
-        { "id": "eng_g1", "name": "Grammar: Tag Questions" },
-        { "id": "eng_g2", "name": "Grammar: Suffix-Prefix" },
-        { "id": "eng_g3", "name": "Grammar: Right Form of Verbs" },
-        { "id": "eng_g4", "name": "Grammar: Connectors" },
-        { "id": "eng_g5", "name": "Grammar: Changing Sentences" },
-        { "id": "eng_g6", "name": "Grammar: Prepositions" }
+        { "id": "eng1_u1", "name": "Unit 1: Good Citizens" },
+        { "id": "eng1_u2", "name": "Unit 2: Pastimes" },
+        { "id": "eng1_u3", "name": "Unit 3: Events and Festivals" },
+        { "id": "eng1_u4", "name": "Unit 4: Are We Aware?" },
+        { "id": "eng1_u5", "name": "Unit 5: Nature and Environment" },
+        { "id": "eng1_u6", "name": "Unit 6: Our Neighbours" },
+        { "id": "eng1_u7", "name": "Unit 7: People Who Stand Out" },
+        { "id": "eng1_u8", "name": "Unit 8: World Heritage" },
+        { "id": "eng1_u9", "name": "Unit 9: Unconventional Vocations" },
+        { "id": "eng1_u10", "name": "Unit 10: Dreams" },
+        { "id": "eng1_u11", "name": "Unit 11: Renewable Energy" },
+        { "id": "eng1_u12", "name": "Unit 12: Roots" },
+        { "id": "eng1_u13", "name": "Unit 13: Media and E-Communications" },
+        { "id": "eng1_u14", "name": "Unit 14: Pleasure and Purpose" }
+      ],
+      "suggestions": [
+        { "topic": "Reading Comprehension: Unit 3 (Events and Festivals)", "priority": "⭐️⭐️⭐️" },
+        { "topic": "Reading Comprehension: Unit 5 (Nature and Environment)", "priority": "⭐️⭐️⭐️" },
+        { "topic": "Reading Comprehension: Unit 8 (World Heritage)", "priority": "⭐️⭐️⭐️" },
+        { "topic": "Summary Writing & Information Transfer", "priority": "⭐️⭐️⭐️" },
+        { "topic": "Paragraph & Story Writing from Prompts", "priority": "⭐️⭐️" }
+      ]
+    },
+    {
+      "id": "eng2",
+      "name": "ইংরেজি ২য় পত্র",
+      "enName": "English 2nd Paper",
+      "code": "108",
+      "category": "compulsory",
+      "chapters": [
+        { "id": "eng2_u1", "name": "Unit 1: Parts of Speech & Prepositions" },
+        { "id": "eng2_u2", "name": "Unit 2: Right Form of Verbs & Subject-Verb Agreement" },
+        { "id": "eng2_u3", "name": "Unit 3: Changing Sentences (Voice & Transformation)" },
+        { "id": "eng2_u4", "name": "Unit 4: Completing Sentences & Conditionals" },
+        { "id": "eng2_u5", "name": "Unit 5: Suffix and Prefix" },
+        { "id": "eng2_u6", "name": "Unit 6: Tag Questions" },
+        { "id": "eng2_u7", "name": "Unit 7: Sentence Connectors & Linking Words" },
+        { "id": "eng2_u8", "name": "Unit 8: Punctuation and Capitalization" },
+        { "id": "eng2_u9", "name": "Unit 9: Paragraph Writing" },
+        { "id": "eng2_u10", "name": "Unit 10: Formal & Informal Letters / Emails" },
+        { "id": "eng2_u11", "name": "Unit 11: Curriculum Vitae (CV) with Cover Letter" },
+        { "id": "eng2_u12", "name": "Unit 12: Composition Writing" }
       ],
       "suggestions": [
         { "topic": "Right Form of Verbs & Subject-Verb Agreement", "priority": "⭐️⭐️⭐️" },
-        { "topic": "Changing Sentences (Voice & Transformation)", "priority": "⭐️⭐️⭐️" },
-        { "topic": "Reading Comprehension: Father of the Nation", "priority": "⭐️⭐️⭐️" },
-        { "topic": "Connectors & Tag Questions Rules", "priority": "⭐️⭐️" }
+        { "topic": "Transformation of Sentences (Simple, Complex, Compound & Voice)", "priority": "⭐️⭐️⭐️" },
+        { "topic": "Completing Sentences (Conditionals & Relative Pronouns)", "priority": "⭐️⭐️⭐️" },
+        { "topic": "Connectors & Tag Questions Rules", "priority": "⭐️⭐️⭐️" },
+        { "topic": "CV with Cover Letter & Formal Email Writing", "priority": "⭐️⭐️" }
       ]
     },
     {
@@ -163,7 +210,7 @@
         { "id": "gm_11", "name": "১১শ অধ্যায়: বীজগণিতীয় অনুপাত ও সমানুপাত" },
         { "id": "gm_12", "name": "১২শ অধ্যায়: দুই চলকবিশিষ্ট সরল সহসমীকরণ" },
         { "id": "gm_13", "name": "১৩শ অধ্যায়: সসীম ধারা" },
-        { "id": "gm_14", "name": "১৪শ অধ্যায়: অনুপাত সদৃশতা ও গাম্ভীর্য" },
+        { "id": "gm_14", "name": "১৪শ অধ্যায়: অনুপাত সদৃশতা ও প্রতিসমতা" },
         { "id": "gm_15", "name": "১৫শ অধ্যায়: ক্ষেত্রফল সম্পর্কিত উপপাদ্য ও সম্পাদ্য" },
         { "id": "gm_16", "name": "১৬শ অধ্যায়: পরিমিতি" },
         { "id": "gm_17", "name": "১৭শ অধ্যায়: পরিসংখ্যান" }

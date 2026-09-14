@@ -10,6 +10,7 @@ import {
   calculateAlgorithmicProgress, 
   toBengaliNumber 
 } from '../utils/progressCalculator';
+import { AutoAdaptiveTargetCard } from './AutoAdaptiveTargetCard';
 
 interface ProgressSlideProps {
   profile: UserProfile;
@@ -19,6 +20,8 @@ interface ProgressSlideProps {
   customSelectedChapterIds?: string[];
   onUpdateProfile: (updated: Partial<UserProfile>) => void;
   onResetProgress: () => void;
+  onUpdateProgressData?: (chapterId: string, updated: Partial<ChapterProgressData>) => void;
+  onNavigateToSyllabus?: (subjectId: string, chapterId: string) => void;
 }
 
 export const ProgressSlide: React.FC<ProgressSlideProps> = ({
@@ -28,6 +31,8 @@ export const ProgressSlide: React.FC<ProgressSlideProps> = ({
   suggestionProgress,
   customSelectedChapterIds,
   onUpdateProfile,
+  onUpdateProgressData,
+  onNavigateToSyllabus,
 }) => {
   // Algorithmic stats
   const algorithmicStats = calculateAlgorithmicProgress(
@@ -137,6 +142,17 @@ export const ProgressSlide: React.FC<ProgressSlideProps> = ({
           >
             <Printer className="w-3.5 h-3.5 text-indigo-400" /> রিপোর্ট প্রিন্ট করুন
           </button>
+        </div>
+
+        {/* Daily Dashboard Card: আজকের অটো-অ্যাডাপ্টিভ টার্গেট অধ্যায় */}
+        <div className="mb-8">
+          <AutoAdaptiveTargetCard
+            subjects={subjects}
+            chapterProgress={chapterProgress}
+            customSelectedChapterIds={customSelectedChapterIds}
+            onUpdateProgressData={onUpdateProgressData || ((_id, _val) => {})}
+            onNavigateToSyllabus={onNavigateToSyllabus}
+          />
         </div>
 
         {/* 3 Core Highlight Cards */}
