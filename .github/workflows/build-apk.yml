@@ -1,9 +1,8 @@
-name: Build Android APK
+name: Build Android APK & Release
 
 on:
   push:
-    branches: [ "main", "master" ]
-    tags: [ "v*" ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 permissions:
@@ -18,19 +17,20 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Java JDK
+      - name: Setup Java JDK 21
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: '17'
+          distribution: 'temurin'
+          java-version: '21'
 
-      - name: Setup Node.js
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
+          cache: 'npm'
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci || npm install
 
       - name: Build Web Application
         run: npm run build
@@ -46,37 +46,28 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
-          ./gradlew assembleRelease || true
+          ./gradlew assembleDebug --no-daemon
 
       - name: Copy & Prepare APK Artifacts
         run: |
-          mkdir -p build-output
-          if [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
-            cp android/app/build/outputs/apk/debug/app-debug.apk build-output/SSC-Master-debug.apk
-            cp android/app/build/outputs/apk/debug/app-debug.apk build-output/app-debug.apk
-          fi
-          if [ -f "android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
-            cp android/app/build/outputs/apk/release/app-release-unsigned.apk build-output/app-release-unsigned.apk
-            cp android/app/build/outputs/apk/release/app-release-unsigned.apk build-output/SSC-Master-release-unsigned.apk
-          fi
+          mkdir -p output-apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk output-apk/SSC-Master-App.apk
 
       - name: Upload APK Artifacts (GitHub Actions)
         uses: actions/upload-artifact@v4
         with:
-          name: ssc-master-apk
-          path: build-output/*.apk
-          retention-days: 30
+          name: SSC-Master-App-APK
+          path: output-apk/SSC-Master-App.apk
 
-      - name: Upload APK Release
+      - name: Create Automatic GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        if: github.ref == 'refs/heads/main'
         with:
-          files: |
-            build-output/SSC-Master-debug.apk
-            build-output/app-debug.apk
-            build-output/app-release-unsigned.apk
-            build-output/SSC-Master-release-unsigned.apk
+          tag_name: v1.0.${{ github.run_number }}
+          name: SSC Master App Release v1.0.${{ github.run_number }}
+          body: |
+            Automated production build for SSC Master Platform.
+            - All AI modules & Firebase sync integrated.
+          files: output-apk/SSC-Master-App.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
