@@ -14,7 +14,10 @@ import {
   Layers,
   Headphones,
   Zap,
-  Flame
+  Flame,
+  Brain,
+  Palette,
+  AlertTriangle
 } from 'lucide-react';
 import { Chapter, ChapterProgressData, ChapterStatus } from '../types';
 import { 
@@ -23,6 +26,7 @@ import {
   toBengaliNumber 
 } from '../utils/progressCalculator';
 import { getPredictionForChapter } from '../data/boardPredictionData';
+import { calculateChapterExamRisk } from '../utils/examRiskPredictor';
 
 export interface UltraModernChapterCardProps {
   chapter: Chapter;
@@ -34,6 +38,8 @@ export interface UltraModernChapterCardProps {
   onOpenMindMap?: (chapterName: string) => void;
   onOpenAudio?: (chapterName: string) => void;
   onStartPractice?: (chapterName: string) => void;
+  onOpenRecallTimer?: (chapterName: string) => void;
+  onOpenCanvas?: (chapterName: string) => void;
 }
 
 const DEFAULT_EXAM_TAGS = [
@@ -79,6 +85,8 @@ export const UltraModernChapterCard: React.FC<UltraModernChapterCardProps> = ({
   onOpenMindMap,
   onOpenAudio,
   onStartPractice,
+  onOpenRecallTimer,
+  onOpenCanvas,
 }) => {
   const [showNoteEditor, setShowNoteEditor] = useState(false);
   const [tempNote, setTempNote] = useState(progress?.notes || '');
@@ -88,6 +96,9 @@ export const UltraModernChapterCard: React.FC<UltraModernChapterCardProps> = ({
 
   // Board prediction metric
   const prediction = getPredictionForChapter(chapter.name);
+
+  // AI Exam Risk Predictor assessment
+  const riskAssessment = calculateChapterExamRisk(chapter.id, progress);
 
   // Selected Exam Tags
   const activeTags = progress?.examTags ?? [DEFAULT_EXAM_TAGS[0], DEFAULT_EXAM_TAGS[3]];
@@ -198,6 +209,15 @@ export const UltraModernChapterCard: React.FC<UltraModernChapterCardProps> = ({
                   {prediction.importancePercentage}% বোর্ড সম্ভাবনা
                 </span>
               )}
+              {/* Exam Risk Assessment Pill */}
+              <span
+                title={riskAssessment.reasons.join(' • ')}
+                className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border font-anek ${riskAssessment.riskBadgeClass}`}
+              >
+                <span>{riskAssessment.riskIcon}</span>
+                <span>{riskAssessment.riskLabelBn}</span>
+              </span>
+
               {prediction?.isMustRead && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-anek uppercase">
                   ★ মাস্ট রিড
@@ -402,7 +422,7 @@ export const UltraModernChapterCard: React.FC<UltraModernChapterCardProps> = ({
         </motion.button>
       </div>
 
-      {/* Quick Study Aids: Mind Map, Audio Summary, Quick Test */}
+      {/* AI OS Study Aids: Mind Map, Audio Summary, Active Recall 5-min, Canvas, AI Practice */}
       <div className="flex items-center justify-between gap-2 pt-3 mt-1 border-t border-white/5 flex-wrap">
         <div className="flex items-center gap-1.5 flex-wrap">
           {onOpenMindMap && (
@@ -424,6 +444,30 @@ export const UltraModernChapterCard: React.FC<UltraModernChapterCardProps> = ({
             >
               <Headphones className="w-3.5 h-3.5 text-amber-400" />
               <span>অডিও সামারি</span>
+            </button>
+          )}
+
+          {onOpenRecallTimer && (
+            <button
+              type="button"
+              onClick={() => onOpenRecallTimer(chapter.name)}
+              className="px-2.5 py-1 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 border border-purple-500/30 text-purple-300 text-[11px] font-bold font-anek flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="৫ মিনিট সাইলেন্ট মেমোরি রিকল"
+            >
+              <Brain className="w-3.5 h-3.5 text-purple-400" />
+              <span>৫ মি. রিকল</span>
+            </button>
+          )}
+
+          {onOpenCanvas && (
+            <button
+              type="button"
+              onClick={() => onOpenCanvas(chapter.name)}
+              className="px-2.5 py-1 rounded-xl bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/30 text-cyan-300 text-[11px] font-bold font-anek flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="ম্যাথ ও সায়েন্স ড্রয়িং ক্যানভাস"
+            >
+              <Palette className="w-3.5 h-3.5 text-cyan-400" />
+              <span>ক্যানভাস</span>
             </button>
           )}
         </div>

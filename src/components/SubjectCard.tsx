@@ -34,6 +34,8 @@ interface SubjectCardProps {
   onOpenMindMap?: (chapterName: string) => void;
   onOpenAudio?: (chapterName: string) => void;
   onStartPractice?: (chapterName: string) => void;
+  onOpenRecallTimer?: (chapterName: string) => void;
+  onOpenCanvas?: (chapterName: string) => void;
   searchQuery?: string;
   statusFilter?: 'all' | ChapterStatus | 'suggestions_only';
 }
@@ -52,6 +54,8 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
   onOpenMindMap,
   onOpenAudio,
   onStartPractice,
+  onOpenRecallTimer,
+  onOpenCanvas,
   searchQuery = '',
   statusFilter = 'all',
 }) => {
@@ -253,6 +257,8 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
                     onOpenMindMap={onOpenMindMap}
                     onOpenAudio={onOpenAudio}
                     onStartPractice={onStartPractice}
+                    onOpenRecallTimer={onOpenRecallTimer}
+                    onOpenCanvas={onOpenCanvas}
                   />
                 );
               })}

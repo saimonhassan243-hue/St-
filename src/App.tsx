@@ -48,6 +48,9 @@ import { MindMapViewerModal } from './components/MindMapViewerModal';
 import { AudioSummaryPlayer } from './components/AudioSummaryPlayer';
 import { ExamEveRevisionModal } from './components/ExamEveRevisionModal';
 import { BoardPredictionMatrixModal } from './components/BoardPredictionMatrixModal';
+import { ActiveRecallTimerModal } from './components/ActiveRecallTimerModal';
+import { MathScienceCanvasModal } from './components/MathScienceCanvasModal';
+import { SpeedMemoryFlashCardsModal } from './components/SpeedMemoryFlashCardsModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { EmergencyBroadcastLockOverlay } from './components/EmergencyBroadcastLockOverlay';
 import { SystemAdminPanel } from './components/SystemAdminPanel';
@@ -186,8 +189,11 @@ export default function StudentDashboard() {
   // Advanced Study Tool Modals & Overlays State
   const [showPredictionModal, setShowPredictionModal] = useState<boolean>(false);
   const [showEveModeModal, setShowEveModeModal] = useState<boolean>(false);
+  const [showFlashCardsModal, setShowFlashCardsModal] = useState<boolean>(false);
   const [activeMindMapChapter, setActiveMindMapChapter] = useState<string | null>(null);
   const [activeAudioChapter, setActiveAudioChapter] = useState<string | null>(null);
+  const [activeRecallChapter, setActiveRecallChapter] = useState<string | null>(null);
+  const [activeCanvasChapter, setActiveCanvasChapter] = useState<string | null>(null);
   const [practiceChapterFilter, setPracticeChapterFilter] = useState<string | undefined>(undefined);
 
   // Recheck Ban Status Function
@@ -792,6 +798,16 @@ export default function StudentDashboard() {
             <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
+                onClick={() => setShowFlashCardsModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-500/40 text-purple-300 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              >
+                <span className="text-sm">🎴</span>
+                <span>১৫ সে. ফ্ল্যাশ কার্ডস</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500 text-white font-black">FAST</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setShowEveModeModal(true)}
                 className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
               >
@@ -888,6 +904,8 @@ export default function StudentDashboard() {
                   onUpdateProgressData={handleUpdateProgressData}
                   onOpenMindMap={(chapter) => setActiveMindMapChapter(chapter)}
                   onOpenAudio={(chapter) => setActiveAudioChapter(chapter)}
+                  onOpenRecallTimer={(chapter) => setActiveRecallChapter(chapter)}
+                  onOpenCanvas={(chapter) => setActiveCanvasChapter(chapter)}
                   onStartPractice={(chapter) => {
                     setPracticeChapterFilter(chapter);
                     setActiveTab('practice');
@@ -1293,6 +1311,26 @@ export default function StudentDashboard() {
           isOpen={!!activeAudioChapter}
           onClose={() => setActiveAudioChapter(null)}
           chapterName={activeAudioChapter || undefined}
+        />
+
+        {/* 15-Second Speed Memory Flash Cards Modal */}
+        <SpeedMemoryFlashCardsModal
+          isOpen={showFlashCardsModal}
+          onClose={() => setShowFlashCardsModal(false)}
+        />
+
+        {/* 5-Minute Silent Active Recall Timer Modal */}
+        <ActiveRecallTimerModal
+          isOpen={!!activeRecallChapter}
+          onClose={() => setActiveRecallChapter(null)}
+          chapterTitle={activeRecallChapter || undefined}
+        />
+
+        {/* Math & Science Digital Drawing Canvas Modal */}
+        <MathScienceCanvasModal
+          isOpen={!!activeCanvasChapter}
+          onClose={() => setActiveCanvasChapter(null)}
+          chapterTitle={activeCanvasChapter || undefined}
         />
 
         {/* Exam Eve Mode Dedicated Quick Modal */}
