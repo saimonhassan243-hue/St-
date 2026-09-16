@@ -68,20 +68,26 @@ jobs:
           retention-days: 30
 
       - name: Create GitHub Release & Upload APK
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/heads/') || startsWith(github.ref, 'refs/tags/')
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: "SSC Prep & Routine Tracker v1.0.${{ github.run_number }}"
+          name: "SSC Prep & AI Routine Tracker v1.0.${{ github.run_number }}"
           body: |
-            ### 📱 SSC Prep & Routine Tracker - Android APK Release
+            ### 📱 SSC Prep & AI Dynamic Exam Routine Tracker - Android APK Release
             - **App ID**: `com.saimon.ssctracker`
             - **App Name**: `SSC Prep & Routine Tracker`
             - **Commit**: `${{ github.sha }}`
             - **Branch**: `${{ github.ref_name }}`
             - **Build Number**: `#${{ github.run_number }}`
+            - **Features Included**:
+              - AI Dynamic Exam Routine Engine with Syllabus Fitting
+              - Strict School Freeze Block (08:00 AM - 04:50 PM)
+              - Weak Point Weighting & Subject Complexity Allocation
+              - Live Exam Countdown & Emergency Security Safeguards
 
             #### 📥 Download & Installation
-            Download the attached `app-debug.apk` or `SSC-Prep-Routine-Tracker-debug.apk` to install on your Android device.
+            Download the attached `app-debug.apk` or `SSC-Prep-Routine-Tracker-debug.apk` below to install directly on your Android phone.
           files: |
             build-output/app-debug.apk
             build-output/SSC-Prep-Routine-Tracker-debug.apk

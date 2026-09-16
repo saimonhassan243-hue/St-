@@ -100,6 +100,19 @@ export interface UserProfile {
 
 export type FourthSubjectKey = 'hmath' | 'biology' | 'agri' | 'homescience';
 
+export type ExamType = 'half_yearly' | 'annual' | 'pre_test' | 'test' | 'ssc';
+export type ExamTypeBn = 'অর্ধবার্ষিক' | 'বার্ষিক' | 'প্রি-টেস্ট' | 'টেস্ট' | 'এসএসসি';
+
+export interface ExamConfigData {
+  examType: ExamType;
+  examTypeBn: ExamTypeBn;
+  examDate: string; // "YYYY-MM-DD"
+  targetStudyHours?: number;
+  totalChaptersInScope?: number;
+  isConfigured?: boolean;
+  updatedAt?: string;
+}
+
 export interface RoutineSlot {
   id: string;
   time: string;
@@ -121,6 +134,7 @@ export interface UserProgressState {
   chapters: Record<string, ChapterProgressData>; // chapterId -> data
   suggestions: Record<string, boolean>; // `${subjectId}_${suggestionIndex}` -> mastered
   examDate: string; // ISO date string
+  examConfig?: ExamConfigData;
   routine?: RoutineSlot[];
 }
 

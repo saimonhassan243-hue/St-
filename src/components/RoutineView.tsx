@@ -1,26 +1,40 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Calendar, Clock, CheckCircle2, Circle, Sparkles, 
-  BookOpen, Plus, Trash2, RotateCcw, Award, Check,
-  Sliders, Sun, Sunset, Moon, Activity, Coffee, Shield,
-  Printer, ArrowRight, Zap, Target, BookMarked, Layers,
-  ChevronDown, ChevronUp, Sunrise
+  Target, Calendar, Clock, Sparkles, CheckCircle2, 
+  BookOpen, Flame, Award, AlertTriangle, ChevronRight, 
+  RotateCcw, Printer, Zap, Layers, ShieldCheck, Sun, 
+  Moon, Coffee, Activity, ChevronLeft, Filter, Info,
+  TrendingUp, BarChart3, CheckSquare, Square
 } from 'lucide-react';
-import { Subject, StreamKey, ReligionBn, UserProfile, ChapterProgressData } from '../types';
 import { 
-  ScheduleInputs, 
-  RoutineTimeSlot, 
-  computeScheduleMetrics, 
-  buildAutomatedRoutine, 
-  buildFullDayTimeline,
-  format12HourBn,
-  formatDurationBn
-} from '../utils/routineBuilder';
-import { toBengaliNumber, formatBengaliProgress } from '../utils/progressCalculator';
-import { runAdaptiveRoutineEngine } from '../utils/adaptiveRoutineEngine';
-import { AutoAdaptiveTargetCard } from './AutoAdaptiveTargetCard';
-import { DailyStudyHoursTracker } from './DailyStudyHoursTracker';
+  UserProfile, 
+  Subject, 
+  StreamKey, 
+  ReligionBn, 
+  ChapterProgressData, 
+  ChapterWeakPointData,
+  ExamConfigData,
+  FirebaseUserData 
+} from '../types';
+import { toBengaliNumber } from '../utils/progressCalculator';
+import { 
+  calculateLiveCountdown, 
+  calculateSyllabusFitting, 
+  generateSmartDailySchedule, 
+  generateWeeklyDistributionPlan,
+  DailyScheduleSlot,
+  DayRoutinePlan,
+  LiveCountdownInfo,
+  SyllabusFittingMetrics,
+  getAiSubjectDifficulty
+} from '../utils/aiDynamicExamRoutineEngine';
+import { ExamTargetConfigModal } from './ExamTargetConfigModal';
+import { 
+  getLocalExamConfig, 
+  saveLocalExamConfig, 
+  syncExamConfigToFirebase 
+} from '../services/firebaseUserService';
 
 interface RoutineViewProps {
   profile: UserProfile;
@@ -31,26 +45,16 @@ interface RoutineViewProps {
   chapterProgress?: Record<string, ChapterProgressData>;
   customSelectedChapterIds?: string[];
   examDate?: string;
+  examConfig?: ExamConfigData;
   sscBatch?: string;
+  currentUser?: FirebaseUserData | null;
   onUpdateProgressData?: (chapterId: string, updated: Partial<ChapterProgressData>) => void;
   onNavigateToSyllabus?: (subjectId: string, chapterId: string) => void;
+  onUpdateExamConfig?: (config: ExamConfigData) => void;
 }
 
-const DEFAULT_INPUTS: ScheduleInputs = {
-  targetStudyHours: 5,
-  schoolStart: '08:00',
-  schoolEnd: '13:30',
-  playStart: '17:00',
-  playEnd: '18:30',
-  sleepStart: '22:30',
-  sleepEnd: '05:30',
-  mealsPersonalHours: 3.0,
-  prayerWorshipHours: 1.8,
-};
-
-const STORAGE_KEY_INPUTS = 'ssc_routine_builder_inputs_v1';
-const STORAGE_KEY_CHECKED = 'ssc_routine_builder_checked_v1';
-const STORAGE_KEY_EXTRA_MINS = 'ssc_routine_extra_study_minutes_v1';
+const STORAGE_KEY_CHECKED_SLOTS = 'ssc_smart_routine_checked_slots_v2';
+const STORAGE_KEY_WEAK_POINTS = 'ssc_student_weak_points_v2';
 
 export const RoutineView: React.FC<RoutineViewProps> = ({
   profile,
@@ -60,931 +64,654 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   allActiveSubjects = [],
   chapterProgress = {},
   customSelectedChapterIds,
-  examDate = '2028-02-15',
+  examDate: propExamDate = '2028-02-15',
+  examConfig: propExamConfig,
   sscBatch = '2028',
+  currentUser,
   onUpdateProgressData,
   onNavigateToSyllabus,
+  onUpdateExamConfig,
 }) => {
-  // 1. User inputs for automated routine builder
-  const [scheduleInputs, setScheduleInputs] = useState<ScheduleInputs>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_INPUTS);
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // fallback
-    }
-    return DEFAULT_INPUTS;
+  // 1. Exam Configuration State
+  const [examConfig, setExamConfig] = useState<ExamConfigData>(() => {
+    if (propExamConfig && propExamConfig.isConfigured) return propExamConfig;
+    const local = getLocalExamConfig();
+    if (local && local.isConfigured) return local;
+    return {
+      examType: 'ssc',
+      examTypeBn: 'এসএসসি',
+      examDate: propExamDate || '2028-02-15',
+      targetStudyHours: 6.5,
+      isConfigured: false,
+      updatedAt: new Date().toISOString(),
+    };
   });
 
-  // 2. Mark-as-done state for daily timetable tasks
-  const [completedTasksMap, setCompletedTasksMap] = useState<Record<string, boolean>>(() => {
+  // Modal display control
+  const [showConfigModal, setShowConfigModal] = useState<boolean>(() => {
+    // Show modal if never configured before
+    const local = getLocalExamConfig();
+    return !(local && local.isConfigured);
+  });
+
+  // 2. Weak Points Map (Read from tracker storage)
+  const [weakPointsMap, setWeakPointsMap] = useState<Record<string, ChapterWeakPointData>>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_CHECKED);
+      const saved = localStorage.getItem(STORAGE_KEY_WEAK_POINTS);
       if (saved) return JSON.parse(saved);
     } catch {
-      // fallback
+      // ignore
     }
     return {};
   });
 
-  // 3. Extra self-study minutes manually logged
-  const [manualExtraMinutes, setManualExtraMinutes] = useState<number>(() => {
+  // 3. Checked / Completed Slots State
+  const [checkedSlots, setCheckedSlots] = useState<Record<string, boolean>>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_EXTRA_MINS);
-      if (saved) return Number(saved) || 0;
+      const saved = localStorage.getItem(STORAGE_KEY_CHECKED_SLOTS);
+      if (saved) return JSON.parse(saved);
     } catch {
-      // fallback
+      // ignore
     }
-    return 0;
+    return {};
   });
 
+  // 4. Day & Filter Navigation State
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
+  const [slotFilter, setSlotFilter] = useState<'all' | 'study' | 'lifestyle'>('all');
+  const [routineRefreshKey, setRoutineRefreshKey] = useState<number>(0);
+
+  // 5. Live Countdown Ticker (1-second pulse)
+  const [countdown, setCountdown] = useState<LiveCountdownInfo>(() =>
+    calculateLiveCountdown(examConfig.examDate)
+  );
+
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_EXTRA_MINS, String(manualExtraMinutes));
-    } catch {
-      // ignore
-    }
-  }, [manualExtraMinutes]);
+    setCountdown(calculateLiveCountdown(examConfig.examDate));
+    const timer = setInterval(() => {
+      setCountdown(calculateLiveCountdown(examConfig.examDate));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [examConfig.examDate]);
 
-  // UI state
-  const [showConfigDrawer, setShowConfigDrawer] = useState(false);
-  const [viewMode, setViewMode] = useState<'study_grid' | 'full_day'>('study_grid');
-  const [showAddCustomModal, setShowAddCustomModal] = useState(false);
-  const [customSlots, setCustomSlots] = useState<RoutineTimeSlot[]>([]);
-  const [customSubject, setCustomSubject] = useState('');
-  const [customTopic, setCustomTopic] = useState('');
-  const [customTime, setCustomTime] = useState('04:00 PM - 05:00 PM');
-
-  // Persist inputs
+  // Sync prop changes
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_INPUTS, JSON.stringify(scheduleInputs));
-    } catch {
-      // ignore
+    if (propExamConfig && propExamConfig.isConfigured) {
+      setExamConfig(propExamConfig);
     }
-  }, [scheduleInputs]);
+  }, [propExamConfig]);
 
-  // Persist checked tasks
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_CHECKED, JSON.stringify(completedTasksMap));
-    } catch {
-      // ignore
-    }
-  }, [completedTasksMap]);
+  // 6. Calculate Dynamic Syllabus Fitting Metrics
+  const fittingMetrics: SyllabusFittingMetrics = calculateSyllabusFitting(
+    allActiveSubjects,
+    customSelectedChapterIds,
+    chapterProgress,
+    examConfig.examDate
+  );
 
-  // Handle input changes
-  const handleInputChange = <K extends keyof ScheduleInputs>(key: K, value: ScheduleInputs[K]) => {
-    setScheduleInputs((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
+  // 7. Generate 7-Day Revolving Plan
+  const weeklyPlans: DayRoutinePlan[] = generateWeeklyDistributionPlan(
+    allActiveSubjects,
+    customSelectedChapterIds,
+    chapterProgress,
+    weakPointsMap,
+    checkedSlots
+  );
 
-  // Compute 24-Hour Metrics with Dynamic Time Buffering:
-  // Excludes Sleep (7-8h), Meals/Personal (3h), School/Coaching, Daily Prayer/Worship slots
-  const metrics = useMemo(() => {
-    return computeScheduleMetrics(scheduleInputs);
-  }, [scheduleInputs]);
+  const activeDayPlan = weeklyPlans[selectedDayIndex] || weeklyPlans[0];
 
-  // Subject list fallback
-  const subjectsToUse = useMemo(() => {
-    if (allActiveSubjects.length > 0) return allActiveSubjects;
-    return [
-      { id: 'math', name: 'সাধারণ গণিত', chapters: [] },
-      { id: 'core', name: stream === 'science' ? 'পদার্থবিজ্ঞান ও রসায়ন' : stream === 'business' ? 'হিসাববিজ্ঞান' : 'ইতিহাস ও বিশ্বসভ্যতা', chapters: [] },
-      religionSubject,
-    ];
-  }, [allActiveSubjects, stream, religionSubject]);
+  // Filter slots based on user selection
+  const visibleSlots = activeDayPlan.slots.filter((s) => {
+    if (slotFilter === 'study') return s.type === 'study';
+    if (slotFilter === 'lifestyle') return s.type !== 'study';
+    return true;
+  });
 
-  // Run Real-Time Auto-Adaptive Routine Calculation Engine
-  const adaptiveEngineResult = useMemo(() => {
-    return runAdaptiveRoutineEngine(
-      subjectsToUse,
-      chapterProgress,
-      customSelectedChapterIds,
-      [],
-      undefined,
-      examDate
-    );
-  }, [subjectsToUse, chapterProgress, customSelectedChapterIds, examDate]);
-
-  // Auto-Allocate Routine Blocks aligned with Adaptive Target Chapter
-  const automatedStudySlots = useMemo(() => {
-    return buildAutomatedRoutine(
-      scheduleInputs,
-      subjectsToUse,
-      stream,
-      religionBn,
-      completedTasksMap,
-      adaptiveEngineResult.targetChapter
-    );
-  }, [scheduleInputs, subjectsToUse, stream, religionBn, completedTasksMap, adaptiveEngineResult.targetChapter]);
-
-  // Combine automated study slots with any custom slots
-  const allStudySlots = useMemo(() => {
-    return [...automatedStudySlots, ...customSlots];
-  }, [automatedStudySlots, customSlots]);
-
-  // Complete 24-Hour Day Flow with Dynamic Buffers
-  const fullDayTimeline = useMemo(() => {
-    return buildFullDayTimeline(scheduleInputs, allStudySlots, religionBn);
-  }, [scheduleInputs, allStudySlots, religionBn]);
-
-  // Toggle mark-as-done for a slot
-  const handleToggleTask = (slotId: string) => {
-    setCompletedTasksMap((prev) => ({
-      ...prev,
-      [slotId]: !prev[slotId],
-    }));
-  };
-
-  // Reset all marks
-  const handleResetChecklist = () => {
-    setCompletedTasksMap({});
-  };
-
-  // Quick Presets
-  const applyPreset = (hours: number) => {
-    setScheduleInputs((prev) => ({
-      ...prev,
-      targetStudyHours: hours,
-    }));
-  };
-
-  // Extra manual study minutes handlers
-  const handleAddManualMinutes = (mins: number) => {
-    setManualExtraMinutes((prev) => prev + mins);
-  };
-
-  const handleResetManualMinutes = () => {
-    setManualExtraMinutes(0);
-  };
-
-  // Compute completed study hours directly from ticked routine slots
-  const completedStudyMinutes = useMemo(() => {
-    return allStudySlots.reduce((acc, slot) => {
-      if (completedTasksMap[slot.id]) {
-        return acc + (slot.durationMinutes || 0);
+  // Toggle slot completion
+  const handleToggleSlot = (slotId: string) => {
+    setCheckedSlots((prev) => {
+      const next = { ...prev, [slotId]: !prev[slotId] };
+      try {
+        localStorage.setItem(STORAGE_KEY_CHECKED_SLOTS, JSON.stringify(next));
+      } catch {
+        // ignore
       }
-      return acc;
-    }, 0);
-  }, [allStudySlots, completedTasksMap]);
-
-  const completedStudyHours = useMemo(() => {
-    return Math.round((completedStudyMinutes / 60) * 10) / 10;
-  }, [completedStudyMinutes]);
-
-  // Add custom slot
-  const handleAddCustom = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customSubject.trim()) return;
-    const newSlot: RoutineTimeSlot = {
-      id: `custom_slot_${Date.now()}`,
-      type: 'study',
-      periodName: 'কাস্টম স্টাডি সেশন (Custom Study Block)',
-      startTime: '16:00',
-      endTime: '17:00',
-      formattedTime: customTime,
-      durationMinutes: 60,
-      durationFormatted: '১.০ ঘণ্টা',
-      subjectTitle: customSubject.trim(),
-      focusTopic: customTopic.trim() || 'নির্ধারিত টপিক রিভিশন ও নোট তৈরি',
-      assignedTask: 'concept_clear',
-      assignedTaskTitle: '📘 কাস্টম টাস্ক',
-      taskBadgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
-      isCompleted: false,
-      categoryTag: 'কাস্টম সেশন',
-      categoryTagColor: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
-      isCustom: true,
-    };
-    setCustomSlots((prev) => [...prev, newSlot]);
-    setCustomSubject('');
-    setCustomTopic('');
-    setShowAddCustomModal(false);
+      return next;
+    });
   };
 
-  const removeCustomSlot = (id: string) => {
-    setCustomSlots((prev) => prev.filter((s) => s.id !== id));
+  // Save Exam Target Configuration
+  const handleSaveExamConfig = async (newConfig: ExamConfigData) => {
+    setExamConfig(newConfig);
+    saveLocalExamConfig(newConfig);
+
+    if (currentUser?.userId || profile.name) {
+      const uId = currentUser?.userId || profile.name;
+      await syncExamConfigToFirebase(uId, newConfig);
+    }
+
+    if (onUpdateExamConfig) {
+      onUpdateExamConfig(newConfig);
+    }
+
+    setRoutineRefreshKey((prev) => prev + 1);
   };
 
-  // Calculation of Task Completion in Daily Timetable
-  const totalStudyBlocks = allStudySlots.length;
-  const completedStudyBlocks = allStudySlots.filter((s) => completedTasksMap[s.id]).length;
-  const progressPercentage = totalStudyBlocks > 0 ? Math.round((completedStudyBlocks / totalStudyBlocks) * 100) : 0;
-  const formattedCompletion = formatBengaliProgress(progressPercentage);
+  // Print Routine
+  const handlePrintRoutine = () => {
+    window.print();
+  };
+
+  // Calculate completed study minutes for today
+  const todayStudySlots = activeDayPlan.slots.filter((s) => s.type === 'study');
+  const completedStudyCount = todayStudySlots.filter((s) => checkedSlots[s.id]).length;
+  const totalStudyCount = todayStudySlots.length;
 
   return (
-    <div className="relative w-full text-slate-100 font-hind">
-      {/* Background ambient lighting */}
-      <div className="absolute top-0 right-10 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none -z-10" />
-      <div className="absolute bottom-0 left-10 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none -z-10" />
+    <div className="relative w-full text-slate-100 font-hind space-y-6 select-none" key={routineRefreshKey}>
+      {/* ========================================================================= */}
+      {/* 1. TOP HEADER & EXAM TARGET BAR                                           */}
+      {/* ========================================================================= */}
+      <div className="relative bg-slate-900/85 border border-white/10 rounded-3xl p-5 sm:p-7 backdrop-blur-2xl shadow-2xl overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
-      <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="relative bg-slate-900/85 border border-white/10 backdrop-blur-2xl rounded-3xl shadow-2xl p-5 sm:p-7 md:p-9 overflow-hidden"
-      >
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 relative z-10">
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-jakarta flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>AI DYNAMIC EXAM ROUTINE ENGINE</span>
+              </span>
+              <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-jakarta">
+                {examConfig.examTypeBn} লক্ষ্যমাত্রা
+              </span>
+            </div>
 
-        {/* ============================================================== */}
-        {/* 1. TOP HEADER & CONTROLS                                       */}
-        {/* ============================================================== */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-white/5">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-600 to-emerald-500 border border-cyan-400/40 flex items-center justify-center text-slate-950 shadow-md shadow-cyan-500/20 shrink-0">
-              <Calendar className="w-6 h-6 stroke-[2.5]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg sm:text-xl font-extrabold text-white tracking-wide font-jakarta">
-                  TIME-BLOCKING ROUTINE BUILDER
-                </h2>
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-anek">
-                  অটোমেটেড রুটিন
-                </span>
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-anek">
-                  {profile.sscBatch}
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                স্কুল, ঘুম ও বিনোদন বাদ দিয়ে অবশিষ্ট ফ্রি সময়ে বিজ্ঞানভিত্তিক স্টাডি টাইম-ব্লকিং
-              </p>
-            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-white font-jakarta flex items-center gap-2.5">
+              <span>{examConfig.examTypeBn} পরীক্ষার স্মার্ট এআই রুটিন</span>
+              <span className="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 font-normal border border-white/10 font-anek">
+                {new Date(examConfig.examDate).toLocaleDateString('bn-BD', { year: 'numeric', month: 'long', day: 'numeric' })}
+              </span>
+            </h2>
+
+            <p className="text-xs sm:text-sm text-slate-300 font-anek mt-1">
+              বিদ্যালয় সময় (০৮:০০ AM - ০৪:৫০ PM) ফ্রিজ রেখে লাইফস্টাইল ব্যালেন্স ও দুর্বল বিষয়ভিত্তিক সময় বরাদ্দ।
+            </p>
           </div>
 
-          {/* Quick Action Buttons */}
-          <div className="flex items-center gap-2 flex-wrap self-start md:self-auto">
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <button
-              onClick={() => setShowConfigDrawer(!showConfigDrawer)}
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-white/10 flex items-center gap-1.5 transition-all cursor-pointer"
+              onClick={() => setShowConfigModal(true)}
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold shadow-lg shadow-indigo-500/25 flex items-center gap-2 transition-all cursor-pointer font-jakarta"
             >
-              <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-              <span>{showConfigDrawer ? 'ইনপুট হাইড' : 'শিডিউল ইনপুট পরিবর্তন'}</span>
-              {showConfigDrawer ? <ChevronUp className="w-3 h-3 text-slate-400" /> : <ChevronDown className="w-3 h-3 text-slate-400" />}
+              <Target className="w-4 h-4 text-amber-300" />
+              <span>টার্গেট পরিবর্তন করুন</span>
             </button>
 
             <button
-              onClick={() => setShowAddCustomModal(true)}
-              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/30 flex items-center gap-1.5 transition-all cursor-pointer"
+              onClick={() => setRoutineRefreshKey((prev) => prev + 1)}
+              className="p-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-white/10 hover:text-white transition-colors cursor-pointer"
+              title="রুটিন রিফ্রেশ"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>স্লট যোগ</span>
+              <RotateCcw className="w-4 h-4" />
             </button>
 
             <button
-              onClick={handleResetChecklist}
-              title="আজকের পড়ার চেকলিস্ট রিসেট করুন"
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 text-xs transition-all cursor-pointer"
+              onClick={handlePrintRoutine}
+              className="p-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-white/10 hover:text-white transition-colors cursor-pointer"
+              title="প্রিন্ট বা সেভ"
             >
-              <RotateCcw className="w-4 h-4 text-slate-400" />
-            </button>
-
-            <button
-              onClick={() => window.print()}
-              title="রুটিন প্রিন্ট করুন"
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 text-xs transition-all cursor-pointer"
-            >
-              <Printer className="w-4 h-4 text-emerald-400" />
+              <Printer className="w-4 h-4" />
             </button>
           </div>
         </div>
+      </div>
 
-        {/* ============================================================== */}
-        {/* 2. SCHEDULE INPUTS & 24H DEDUCTION METRICS DRAWER              */}
-        {/* ============================================================== */}
-        <AnimatePresence>
-          {showConfigDrawer && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.25 }}
-              className="overflow-hidden"
-            >
-              <div className="mt-6 p-5 sm:p-6 rounded-3xl bg-slate-800/60 border border-cyan-500/25 backdrop-blur-xl shadow-xl">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-                  <div className="flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-cyan-400" />
-                    <h3 className="text-sm font-bold text-white font-jakarta">
-                      DAILY SCHEDULE INPUTS & PARAMETERS
-                    </h3>
-                  </div>
-
-                  {/* Preset Buttons */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[11px] text-slate-400 mr-1 font-anek">কুইক প্রিসেট:</span>
-                    {[
-                      { hours: 3.5, label: '৩.৫ ঘণ্টা (হালকা)' },
-                      { hours: 5, label: '৫ ঘণ্টা (আদর্শ)' },
-                      { hours: 6.5, label: '৬.৫ ঘণ্টা (পরীক্ষা)' },
-                      { hours: 8, label: '৮ ঘণ্টা (নিবিড়)' },
-                    ].map((p) => (
-                      <button
-                        key={p.hours}
-                        onClick={() => applyPreset(p.hours)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer font-anek ${
-                          scheduleInputs.targetStudyHours === p.hours
-                            ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30'
-                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-white/5'
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 4 Inputs Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {/* 1. Target Study Hours */}
-                  <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/5 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                          <Target className="w-3.5 h-3.5 text-cyan-400" />
-                          <span>দৈনিক টার্গেট স্টাডি</span>
-                        </label>
-                        <span className="text-sm font-extrabold text-cyan-400 font-anek">
-                          {toBengaliNumber(scheduleInputs.targetStudyHours)} ঘণ্টা
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-400">প্রতিদিন পড়ার মোট কাঙ্ক্ষিত সময়</p>
-                    </div>
-
-                    <div className="flex items-center gap-2 mt-3">
-                      <button
-                        onClick={() => handleInputChange('targetStudyHours', Math.max(2, scheduleInputs.targetStudyHours - 0.5))}
-                        className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center transition-colors cursor-pointer"
-                      >
-                        -
-                      </button>
-                      <input
-                        type="range"
-                        min="2"
-                        max="10"
-                        step="0.5"
-                        value={scheduleInputs.targetStudyHours}
-                        onChange={(e) => handleInputChange('targetStudyHours', parseFloat(e.target.value))}
-                        className="flex-1 accent-cyan-400 cursor-pointer h-1.5 bg-slate-700 rounded-lg"
-                      />
-                      <button
-                        onClick={() => handleInputChange('targetStudyHours', Math.min(10, scheduleInputs.targetStudyHours + 0.5))}
-                        className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center transition-colors cursor-pointer"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 2. School Hours */}
-                  <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/5 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                          <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-                          <span>স্কুল ও কোচিং সময়</span>
-                        </label>
-                        <span className="text-xs font-bold text-amber-300 font-anek">
-                          {formatDurationBn(metrics.schoolMinutes)}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-400">শুরু এবং ছুটির সময়সীমা</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 mt-3">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block mb-0.5">শুরু</span>
-                        <input
-                          type="time"
-                          value={scheduleInputs.schoolStart}
-                          onChange={(e) => handleInputChange('schoolStart', e.target.value)}
-                          className="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:ring-1 focus:ring-amber-500 font-anek"
-                        />
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block mb-0.5">ছুটি</span>
-                        <input
-                          type="time"
-                          value={scheduleInputs.schoolEnd}
-                          onChange={(e) => handleInputChange('schoolEnd', e.target.value)}
-                          className="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:ring-1 focus:ring-amber-500 font-anek"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 3. Play & Relaxation Hours */}
-                  <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/5 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                          <Activity className="w-3.5 h-3.5 text-rose-400" />
-                          <span>খেলাধুলা ও মাইন্ড রিফ্রেশ</span>
-                        </label>
-                        <span className="text-xs font-bold text-rose-300 font-anek">
-                          {formatDurationBn(metrics.playMinutes)}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-400">শারীরিক ব্যায়াম ও বন্ধুদের সাথে সময়</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 mt-3">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block mb-0.5">শুরু</span>
-                        <input
-                          type="time"
-                          value={scheduleInputs.playStart}
-                          onChange={(e) => handleInputChange('playStart', e.target.value)}
-                          className="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:ring-1 focus:ring-rose-500 font-anek"
-                        />
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block mb-0.5">শেষ</span>
-                        <input
-                          type="time"
-                          value={scheduleInputs.playEnd}
-                          onChange={(e) => handleInputChange('playEnd', e.target.value)}
-                          className="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:ring-1 focus:ring-rose-500 font-anek"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 4. Sleep Schedule */}
-                  <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/5 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                          <Moon className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>ঘুম ও বিশ্রামের সময়</span>
-                        </label>
-                        <span className="text-xs font-bold text-indigo-300 font-anek">
-                          {formatDurationBn(metrics.sleepMinutes)}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-400">পরিমিত ঘুম স্মৃতিশক্তি বৃদ্ধি করে</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 mt-3">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block mb-0.5">ঘুমাতে যাওয়া</span>
-                        <input
-                          type="time"
-                          value={scheduleInputs.sleepStart}
-                          onChange={(e) => handleInputChange('sleepStart', e.target.value)}
-                          className="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:ring-1 focus:ring-indigo-500 font-anek"
-                        />
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block mb-0.5">ঘুম থেকে উঠা</span>
-                        <input
-                          type="time"
-                          value={scheduleInputs.sleepEnd}
-                          onChange={(e) => handleInputChange('sleepEnd', e.target.value)}
-                          className="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:ring-1 focus:ring-indigo-500 font-anek"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 24-Hour Day Deduction Formula Bar with Dynamic Time Buffering */}
-                <div className="mt-5 p-4 rounded-2xl bg-slate-950/70 border border-white/5">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs mb-2.5">
-                    <span className="font-bold text-slate-200 flex items-center gap-1.5 font-jakarta">
-                      <Zap className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>২৪ ঘণ্টার স্বয়ংক্রিয় টাইম-ব্যালান্স ও ডায়নামিক টাইম বাফারিং</span>
-                    </span>
-                    <span className="text-slate-400 font-anek">
-                      ২৪ ঘণ্টা - ({toBengaliNumber(metrics.sleepHours)}h ঘুম + {toBengaliNumber(metrics.mealsPersonalHours)}h খাবার + {toBengaliNumber(metrics.schoolHours)}h স্কুল + {toBengaliNumber(metrics.worshipPrayerHours)}h নামাজ) = <strong className="text-cyan-400 font-bold">{toBengaliNumber(metrics.freeHours)} ঘণ্টা ফ্রি সময়</strong>
-                    </span>
-                  </div>
-
-                  {/* Multi-segment 24-hour bar */}
-                  <div className="w-full h-3.5 rounded-full overflow-hidden flex bg-slate-800 border border-slate-700/60 shadow-inner">
-                    {/* Sleep segment (7-8h) */}
-                    <div
-                      style={{ width: `${(metrics.sleepMinutes / 1440) * 100}%` }}
-                      className="bg-indigo-600 relative group"
-                      title={`ঘুম (৭-৮ ঘণ্টা): ${formatDurationBn(metrics.sleepMinutes)}`}
-                    />
-                    {/* Meals & Personal segment (3h) */}
-                    <div
-                      style={{ width: `${(metrics.mealsPersonalMinutes / 1440) * 100}%` }}
-                      className="bg-rose-500 relative group"
-                      title={`খাবার ও ব্যক্তিগত সময় (৩ ঘণ্টা বাফার): ${formatDurationBn(metrics.mealsPersonalMinutes)}`}
-                    />
-                    {/* School segment */}
-                    <div
-                      style={{ width: `${(metrics.schoolMinutes / 1440) * 100}%` }}
-                      className="bg-amber-500 relative group"
-                      title={`স্কুল ও কোচিং: ${formatDurationBn(metrics.schoolMinutes)}`}
-                    />
-                    {/* Prayer/Worship segment (1.8h) */}
-                    <div
-                      style={{ width: `${(metrics.worshipPrayerMinutes / 1440) * 100}%` }}
-                      className="bg-teal-500 relative group"
-                      title={`নামাজ ও উপাসনা: ${formatDurationBn(metrics.worshipPrayerMinutes)}`}
-                    />
-                    {/* Play segment */}
-                    <div
-                      style={{ width: `${(metrics.playMinutes / 1440) * 100}%` }}
-                      className="bg-purple-500 relative group"
-                      title={`খেলাধুলা ও মাইন্ড রিফ্রেশ: ${formatDurationBn(metrics.playMinutes)}`}
-                    />
-                    {/* Study allocated segment */}
-                    <div
-                      style={{ width: `${(metrics.targetStudyMinutes / 1440) * 100}%` }}
-                      className="bg-gradient-to-r from-cyan-400 to-emerald-400 relative group"
-                      title={`টার্গেট স্টাডি: ${formatDurationBn(metrics.targetStudyMinutes)}`}
-                    />
-                    {/* Remaining leisure segment */}
-                    <div
-                      style={{ width: `${(metrics.remainingLeisureMinutes / 1440) * 100}%` }}
-                      className="bg-slate-700/60 relative group"
-                      title={`অবশিষ্ট অবসর বাফার: ${formatDurationBn(metrics.remainingLeisureMinutes)}`}
-                    />
-                  </div>
-
-                  {/* Legend */}
-                  <div className="flex items-center gap-3.5 flex-wrap mt-2.5 text-[11px] text-slate-400 font-anek">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block" />
-                      ঘুম ({toBengaliNumber(metrics.sleepHours)}h)
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
-                      খাবার ও ফ্রেশ ({toBengaliNumber(metrics.mealsPersonalHours)}h)
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
-                      স্কুল ({toBengaliNumber(metrics.schoolHours)}h)
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-teal-500 inline-block" />
-                      নামাজ ({toBengaliNumber(metrics.worshipPrayerHours)}h)
-                    </span>
-                    <span className="flex items-center gap-1.5 font-bold text-cyan-300">
-                      <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block" />
-                      টার্গেট স্টাডি ({toBengaliNumber(metrics.targetStudyHours)}h)
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-slate-600 inline-block" />
-                      অবশিষ্ট বাফার ({toBengaliNumber(Math.round((metrics.remainingLeisureMinutes / 60) * 10) / 10)}h)
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* ============================================================== */}
-        {/* 2.2 DAILY STUDY HOURS PROGRESS TRACKER (BOARD RANK #1 TARGET)  */}
-        {/* ============================================================== */}
-        <div className="mt-6">
-          <DailyStudyHoursTracker
-            targetStudyHours={scheduleInputs.targetStudyHours}
-            completedStudyHours={completedStudyHours}
-            manualExtraMinutes={manualExtraMinutes}
-            onAddManualMinutes={handleAddManualMinutes}
-            onResetManualMinutes={handleResetManualMinutes}
-            boardRankMetrics={adaptiveEngineResult.boardRankMetrics}
-            completedTasksCount={completedStudyBlocks}
-            totalTasksCount={totalStudyBlocks}
-          />
-        </div>
-
-        {/* ============================================================== */}
-        {/* 2.5 REAL-TIME AUTO-ADAPTIVE TARGET CARD (TODAY'S ADAPTIVE CHAPTER) */}
-        {/* ============================================================== */}
-        <div className="mt-6">
-          <AutoAdaptiveTargetCard
-            subjects={subjectsToUse}
-            chapterProgress={chapterProgress}
-            customSelectedChapterIds={customSelectedChapterIds}
-            onUpdateProgressData={onUpdateProgressData || ((_id, _val) => {})}
-            onNavigateToSyllabus={onNavigateToSyllabus}
-          />
-        </div>
-
-        {/* ============================================================== */}
-        {/* 3. DAILY ROUTINE PROGRESS & VIEW MODE SWITCHER                 */}
-        {/* ============================================================== */}
-        <div className="mt-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-slate-900/90 via-slate-800/80 to-slate-900/90 border border-white/10 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 shadow-lg">
-          {/* Progress metric with 'Anek Bangla' font and animated gradient bar */}
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-slate-950 flex items-center justify-center font-extrabold text-base shadow-md shadow-emerald-500/20 font-anek shrink-0">
-              {progressPercentage}%
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-base font-bold text-white font-jakarta">
-                  TODAY'S ROUTINE PROGRESS
-                </h3>
-                <span 
-                  className="text-xs font-bold text-emerald-400 font-anek"
-                  style={{ fontFamily: "'Anek Bangla', system-ui, sans-serif" }}
-                >
-                  {formattedCompletion}
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 font-anek mt-0.5">
-                নির্ধারিত {toBengaliNumber(totalStudyBlocks)}টি স্টাডি ব্লকের মধ্যে {toBengaliNumber(completedStudyBlocks)}টি সম্পন্ন হয়েছে
-              </p>
-            </div>
-          </div>
-
-          {/* Animated Gradient Bar & View Switcher */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-            <div className="w-full sm:w-56">
-              <div className="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-700/60">
-                <motion.div
-                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 shadow-sm"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progressPercentage}%` }}
-                  transition={{ duration: 0.45, ease: 'easeOut' }}
-                />
-              </div>
-            </div>
-
-            {/* View Mode Toggle */}
-            <div className="p-1 rounded-xl bg-slate-950/80 border border-white/5 flex items-center gap-1 self-start sm:self-auto">
-              <button
-                onClick={() => setViewMode('study_grid')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === 'study_grid'
-                    ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <BookOpen className="w-3.5 h-3.5" />
-                <span>স্টাডি গ্রিড</span>
-              </button>
-              <button
-                onClick={() => setViewMode('full_day')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === 'full_day'
-                    ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Clock className="w-3.5 h-3.5" />
-                <span>২৪ ঘণ্টা শিডিউল</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ============================================================== */}
-        {/* 4. INTERACTIVE TIMETABLE GRID                                  */}
-        {/* ============================================================== */}
-        <div className="mt-6">
-          <div className="flex items-center justify-between mb-4">
+      {/* ========================================================================= */}
+      {/* 2. LIVE COUNTDOWN & DYNAMIC SYLLABUS FITTING CARD                         */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Left: Live Countdown Timer (5 cols) */}
+        <div className="lg:col-span-5 rounded-3xl bg-slate-900/85 border border-indigo-500/30 p-5 sm:p-6 backdrop-blur-xl shadow-2xl flex flex-col justify-between relative overflow-hidden">
+          <div className="flex items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-400 font-jakarta uppercase tracking-wider">
-                {viewMode === 'study_grid' ? 'AUTOMATED STUDY BLOCKS & TASK ALLOCATION' : 'COMPLETE 24-HOUR CHRONOLOGICAL TIMELINE'}
-              </span>
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-anek">
-                {toBengaliNumber(viewMode === 'study_grid' ? allStudySlots.length : fullDayTimeline.length)}টি স্লট
-              </span>
+              <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+                <Clock className="w-4 h-4 animate-pulse" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 font-jakarta uppercase">LIVE COUNTDOWN</span>
+                <h4 className="text-xs font-bold text-white font-anek">পরীক্ষার বাকি সময়</h4>
+              </div>
             </div>
-            <span className="text-xs text-slate-400 font-hind">
-              ✓ চেকবক্সে ক্লিক করে আজকের পড়া সম্পন্ন মার্ক করুন
+
+            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${countdown.statusBadgeColor} font-anek`}>
+              {countdown.statusBadgeBn}
             </span>
           </div>
 
-          {/* Timetable Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {(viewMode === 'study_grid' ? allStudySlots : fullDayTimeline).map((slot, idx) => {
-              const isDone = completedTasksMap[slot.id];
-              const isStudy = slot.type === 'study';
+          {/* Big Digital Countdown Grid */}
+          <div className="grid grid-cols-4 gap-2 my-2">
+            <div className="p-3 rounded-2xl bg-slate-950/80 border border-indigo-500/20 text-center">
+              <span className="block text-2xl sm:text-3xl font-black text-cyan-400 font-jakarta">
+                {toBengaliNumber(countdown.daysRemaining)}
+              </span>
+              <span className="text-[10px] text-slate-400 font-anek">দিন (Days)</span>
+            </div>
 
-              // Visual styling based on time slot
-              let cardBg = 'bg-slate-800/40 hover:bg-slate-800/60 border-white/5';
-              let iconHeader = <Sun className="w-4 h-4 text-amber-400" />;
-              
-              if (slot.id.includes('morning')) {
-                iconHeader = <Sun className="w-4 h-4 text-amber-400" />;
-              } else if (slot.id.includes('evening')) {
-                iconHeader = <Sunset className="w-4 h-4 text-orange-400" />;
-              } else if (slot.id.includes('night')) {
-                iconHeader = <Moon className="w-4 h-4 text-indigo-400" />;
-              } else if (slot.type === 'school') {
-                iconHeader = <BookOpen className="w-4 h-4 text-amber-400" />;
-                cardBg = 'bg-amber-950/20 border-amber-500/20';
-              } else if (slot.type === 'play') {
-                iconHeader = <Activity className="w-4 h-4 text-rose-400" />;
-                cardBg = 'bg-rose-950/20 border-rose-500/20';
-              } else if (slot.type === 'sleep') {
-                iconHeader = <Moon className="w-4 h-4 text-slate-400" />;
-                cardBg = 'bg-slate-900/60 border-slate-700/40';
-              }
+            <div className="p-3 rounded-2xl bg-slate-950/80 border border-indigo-500/20 text-center">
+              <span className="block text-2xl sm:text-3xl font-black text-indigo-400 font-jakarta">
+                {toBengaliNumber(countdown.hoursRemaining)}
+              </span>
+              <span className="text-[10px] text-slate-400 font-anek">ঘণ্টা (Hrs)</span>
+            </div>
 
-              if (isDone && isStudy) {
-                cardBg = 'bg-emerald-950/30 border-emerald-500/30 shadow-lg shadow-emerald-500/5';
-              }
+            <div className="p-3 rounded-2xl bg-slate-950/80 border border-indigo-500/20 text-center">
+              <span className="block text-2xl sm:text-3xl font-black text-emerald-400 font-jakarta">
+                {toBengaliNumber(countdown.minutesRemaining)}
+              </span>
+              <span className="text-[10px] text-slate-400 font-anek">মিনিট (Mins)</span>
+            </div>
 
+            <div className="p-3 rounded-2xl bg-slate-950/80 border border-indigo-500/20 text-center relative overflow-hidden">
+              <span className="block text-2xl sm:text-3xl font-black text-pink-400 font-jakarta">
+                {toBengaliNumber(String(Math.floor((Date.now() / 1000) % 60)).padStart(2, '0'))}
+              </span>
+              <span className="text-[10px] text-slate-400 font-anek">সেকেন্ড (Sec)</span>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs text-slate-400 font-anek">
+            <span>টার্গেট ব্যাচ: <strong className="text-white">{sscBatch}</strong></span>
+            <span>দৈনিক লক্ষ্য: <strong className="text-amber-300">{toBengaliNumber((examConfig.targetStudyHours || 6.5).toFixed(1))} ঘণ্টা</strong></span>
+          </div>
+        </div>
+
+        {/* Right: Dynamic Syllabus Fitting Engine (7 cols) */}
+        <div className="lg:col-span-7 rounded-3xl bg-slate-900/85 border border-white/10 p-5 sm:p-6 backdrop-blur-xl shadow-2xl flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 font-jakarta uppercase">SYLLABUS FITTING ENGINE</span>
+                  <h4 className="text-xs font-bold text-white font-anek">সিলেবাস কভারেজ ও গতির পূর্বাভাস</h4>
+                </div>
+              </div>
+
+              <span className="text-xs font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/30 font-jakarta">
+                {toBengaliNumber(fittingMetrics.completionRatePercent)}% সমাপ্ত
+              </span>
+            </div>
+
+            {/* Progress bar */}
+            <div className="w-full bg-slate-950 rounded-full h-3 p-0.5 border border-white/10 mb-4 overflow-hidden">
+              <div 
+                className="bg-gradient-to-r from-emerald-500 to-cyan-500 h-full rounded-full transition-all duration-700 shadow-sm"
+                style={{ width: `${Math.min(100, fittingMetrics.completionRatePercent)}%` }}
+              />
+            </div>
+
+            {/* 4 Fitting Stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-anek">
+              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5">
+                <span className="text-[10px] text-slate-400 block">মোট অধ্যায়</span>
+                <strong className="text-sm font-bold text-white font-jakarta">
+                  {toBengaliNumber(fittingMetrics.totalActiveChapters)}টি
+                </strong>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5">
+                <span className="text-[10px] text-slate-400 block">বাকি / ব্যাকলগ</span>
+                <strong className="text-sm font-bold text-amber-300 font-jakarta">
+                  {toBengaliNumber(fittingMetrics.backlogChapters)}টি
+                </strong>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5">
+                <span className="text-[10px] text-slate-400 block">প্রয়োজনীয় গতি</span>
+                <strong className="text-sm font-bold text-indigo-300 font-jakarta">
+                  {fittingMetrics.requiredDailyVelocityBn} অধ্যায়/দিন
+                </strong>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5">
+                <span className="text-[10px] text-slate-400 block">সমাপ্তির তারিখ</span>
+                <strong className="text-xs font-bold text-emerald-300 font-jakarta">
+                  {fittingMetrics.estimatedCompletionDateBn}
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Pacing advice banner */}
+          <div className="mt-3.5 p-3 rounded-2xl bg-indigo-950/40 border border-indigo-500/20 text-xs text-indigo-200 font-anek flex items-center gap-2.5">
+            <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+            <p className="line-clamp-2 leading-relaxed">
+              <strong>এআই নির্দেশনা:</strong> {fittingMetrics.pacingAdviceBn}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 3. AI DURATION RULES & WEAK POINT LOGIC EXPLAINER                         */}
+      {/* ========================================================================= */}
+      <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/60 border border-white/5 backdrop-blur-lg flex flex-col md:flex-row md:items-center justify-between gap-4 font-anek">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center border border-purple-500/30 shrink-0">
+            <BarChart3 className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-white font-jakarta flex items-center gap-2">
+              <span>এআই বিষয়ভিত্তিক সময় বরাদ্দ ও দুর্বল পয়েন্ট নিয়ম</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                MAX 4 SUBJECTS/DAY
+              </span>
+            </h4>
+            <p className="text-xs text-slate-400 mt-0.5">
+              কঠিন বিষয়ে ৯০-১২০ মি., প্রায়োগিক বিষয়ে ৬০-৭৫ মি., তাত্ত্বিক বিষয়ে ৪৫-৬০ মি. এবং দুর্বল বিষয়ে +১৫ থেকে +৩০ মিনিট অটো-বুস্ট।
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-[11px] shrink-0 font-jakarta">
+          <span className="px-2.5 py-1 rounded-lg bg-rose-500/15 text-rose-300 border border-rose-500/30">
+            উচ্চ জটিলতা: ৯০-১২০ মি.
+          </span>
+          <span className="px-2.5 py-1 rounded-lg bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+            প্রায়োগিক: ৬০-৭৫ মি.
+          </span>
+          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+            তাত্ত্বিক: ৪৫-৬০ মি.
+          </span>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 4. 7-DAY REVOLVING SCHEDULE TABS & FILTER BAR                              */}
+      {/* ========================================================================= */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Day Selector Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none font-anek">
+          {weeklyPlans.map((plan) => {
+            const isSelected = plan.dayIndex === selectedDayIndex;
+            return (
+              <button
+                key={plan.dayIndex}
+                onClick={() => setSelectedDayIndex(plan.dayIndex)}
+                className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25 ring-2 ring-indigo-400'
+                    : 'bg-slate-900/80 text-slate-300 border border-white/5 hover:bg-slate-800'
+                }`}
+              >
+                <span>{plan.dayNameBn}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${
+                  isSelected ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {plan.dateFormattedBn}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Slot Filters (All / Study / Lifestyle) */}
+        <div className="flex items-center gap-1.5 bg-slate-900/80 p-1 rounded-2xl border border-white/5 shrink-0 font-anek text-xs">
+          <button
+            onClick={() => setSlotFilter('all')}
+            className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+              slotFilter === 'all'
+                ? 'bg-slate-800 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            সব টাইম-ব্লক ({activeDayPlan.slots.length})
+          </button>
+          <button
+            onClick={() => setSlotFilter('study')}
+            className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              slotFilter === 'study'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>স্টাডি সেশন ({todayStudySlots.length})</span>
+          </button>
+          <button
+            onClick={() => setSlotFilter('lifestyle')}
+            className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+              slotFilter === 'lifestyle'
+                ? 'bg-slate-800 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            লাইফস্টাইল ও স্কুল
+          </button>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 5. INTERACTIVE TIMELINE / DAILY SCHEDULE CARD                             */}
+      {/* ========================================================================= */}
+      <div className="bg-slate-900/85 border border-white/10 rounded-3xl p-5 sm:p-7 backdrop-blur-2xl shadow-2xl space-y-4">
+        {/* Timeline Header summary */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
+          <div>
+            <h3 className="text-base font-bold text-white font-jakarta flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-cyan-400" />
+              <span>{activeDayPlan.dayNameBn}-এর সময়সূচি ({activeDayPlan.dateFormattedBn})</span>
+            </h3>
+            <p className="text-xs text-slate-400 font-anek mt-0.5">
+              মোট অধ্যয়ন সময়: <strong className="text-cyan-300">{activeDayPlan.totalStudyHoursBn}</strong> • নির্বাচিত বিষয়: <strong className="text-white">{toBengaliNumber(activeDayPlan.assignedSubjectsCount)}টি</strong>
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-white/5 font-anek">
+              সম্পন্ন: <strong className="text-emerald-400">{toBengaliNumber(completedStudyCount)}</strong> / {toBengaliNumber(totalStudyCount)} সেশন
+            </span>
+          </div>
+        </div>
+
+        {/* Timeline Slots Container */}
+        <div className="space-y-3 pt-2">
+          {visibleSlots.map((slot, idx) => {
+            const isDone = Boolean(checkedSlots[slot.id]);
+
+            // ===================================================================
+            // CASE A: STRICT FROZEN SCHOOL BLOCK (08:00 AM - 04:50 PM)
+            // ===================================================================
+            if (slot.isFixedSchoolBlock) {
               return (
-                <motion.div
+                <div
                   key={slot.id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.98 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.2 }}
-                  className={`relative p-5 rounded-2xl border transition-all flex flex-col justify-between overflow-hidden ${cardBg}`}
+                  className="relative p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-indigo-950/60 via-slate-950/80 to-indigo-950/60 border-2 border-indigo-500/40 shadow-lg overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-anek"
                 >
-                  {/* Subtle top indicator bar */}
-                  {isDone && isStudy && (
-                    <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400" />
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-11 h-11 rounded-2xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 flex items-center justify-center shrink-0 shadow-inner">
+                      <span className="text-xl">🏫</span>
+                    </div>
+
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-indigo-500/30 text-indigo-200 border border-indigo-500/50 font-jakarta uppercase tracking-wider">
+                          STRICT FROZEN SCHOOL BLOCK
+                        </span>
+                        <span className="text-xs font-bold text-indigo-300 font-jakarta">
+                          {slot.formattedTime}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                          {slot.durationFormatted}
+                        </span>
+                      </div>
+
+                      <h4 className="text-sm sm:text-base font-bold text-white font-jakarta">
+                        {slot.periodName}
+                      </h4>
+                      <p className="text-xs text-indigo-200/80 mt-0.5">
+                        {slot.focusTopic} (এই ব্লকে কোনো অতিরিক্ত স্টাডি বা রিভিশন টাস্ক দেওয়া হয় না)।
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 sm:self-center">
+                    <span className="text-[11px] font-bold text-indigo-300/90 px-3 py-1 rounded-xl bg-indigo-950/80 border border-indigo-500/30 flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>ক্লাস ও প্রাতিষ্ঠানিক সময়</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+
+            // ===================================================================
+            // CASE B: STUDY SESSIONS (High-Yield Subject Blocks)
+            // ===================================================================
+            if (slot.type === 'study') {
+              return (
+                <div
+                  key={slot.id}
+                  className={`relative p-4 sm:p-5 rounded-2xl border transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-anek ${
+                    isDone
+                      ? 'bg-emerald-950/20 border-emerald-500/30 opacity-80'
+                      : 'bg-slate-950/60 border-white/10 hover:border-indigo-500/40 hover:bg-slate-950/80 shadow-md'
+                  }`}
+                >
+                  <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                    {/* Checkbox */}
+                    <button
+                      onClick={() => handleToggleSlot(slot.id)}
+                      className="mt-0.5 p-1 text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer shrink-0"
+                      title={isDone ? 'সম্পন্ন হিসেবে চিহ্নিত' : 'সম্পন্ন করুন'}
+                    >
+                      {isDone ? (
+                        <CheckSquare className="w-5 h-5 text-emerald-400" />
+                      ) : (
+                        <Square className="w-5 h-5 text-slate-500" />
+                      )}
+                    </button>
+
+                    <div className="flex-1 min-w-0">
+                      {/* Badge bar */}
+                      <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                        <span className="text-xs font-black text-cyan-300 font-jakarta">
+                          {slot.formattedTime}
+                        </span>
+
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-jakarta">
+                          {slot.durationFormatted}
+                        </span>
+
+                        {slot.assignedTaskLabelBn && (
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${slot.taskBadgeColor || 'bg-blue-500/20 text-blue-300 border-blue-500/40'}`}>
+                            {slot.assignedTaskLabelBn}
+                          </span>
+                        )}
+
+                        {slot.hasWeakPointBoost && (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 font-jakarta animate-pulse">
+                            <Flame className="w-3 h-3 text-amber-400" />
+                            <span>WEAK POINT BOOST</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Subject and Chapter title */}
+                      <div className="flex flex-wrap items-baseline gap-2">
+                        <h4 className="text-sm sm:text-base font-extrabold text-white font-jakarta">
+                          {slot.subjectTitle}
+                        </h4>
+                        {slot.chapterTitle && (
+                          <span className="text-xs text-indigo-300 font-bold">
+                            • {slot.chapterTitle}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Focus Topic description */}
+                      <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                        {slot.focusTopic}
+                      </p>
+
+                      {/* Weak point reason note */}
+                      {slot.weakPointReasonBn && (
+                        <div className="mt-1.5 text-[11px] text-amber-300/90 flex items-center gap-1 font-anek">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>{slot.weakPointReasonBn}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Action: Navigate to chapter in syllabus */}
+                  {onNavigateToSyllabus && slot.subjectId && slot.chapterId && (
+                    <div className="shrink-0 sm:self-center">
+                      <button
+                        onClick={() => onNavigateToSyllabus(slot.subjectId!, slot.chapterId!)}
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-white/10 transition-colors cursor-pointer"
+                      >
+                        <span>অধ্যায়ে যান</span>
+                        <ChevronRight className="w-3.5 h-3.5 text-indigo-400" />
+                      </button>
+                    </div>
                   )}
+                </div>
+              );
+            }
+
+            // ===================================================================
+            // CASE C: LIFESTYLE BLOCKS (Sleep, Meals, Recreation, Review)
+            // ===================================================================
+            return (
+              <div
+                key={slot.id}
+                className="relative p-3.5 sm:p-4 rounded-2xl bg-slate-950/40 border border-white/5 flex items-center justify-between gap-4 font-anek text-xs text-slate-300"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-slate-800/80 text-slate-400 flex items-center justify-center shrink-0">
+                    {slot.type === 'sleep' && <Moon className="w-4 h-4 text-indigo-400" />}
+                    {slot.type === 'meal' && <Coffee className="w-4 h-4 text-amber-400" />}
+                    {slot.type === 'worship' && <Sun className="w-4 h-4 text-emerald-400" />}
+                    {slot.type === 'leisure_sports' && <Activity className="w-4 h-4 text-pink-400" />}
+                    {slot.type === 'review' && <CheckCircle2 className="w-4 h-4 text-cyan-400" />}
+                  </div>
 
                   <div>
-                    {/* Slot Header */}
-                    <div className="flex items-center justify-between gap-2 mb-3">
-                      <div className="flex items-center gap-2">
-                        {iconHeader}
-                        <span className="text-xs font-bold text-white font-jakarta">
-                          {slot.periodName}
-                        </span>
-                      </div>
-
-                      {/* Duration Badge */}
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-900/90 text-cyan-300 border border-cyan-500/30 font-anek">
-                        {slot.durationFormatted}
-                      </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-400 font-jakarta">{slot.formattedTime}</span>
+                      <span className="text-[10px] text-slate-500">({slot.durationFormatted})</span>
                     </div>
-
-                    {/* Time Range */}
-                    <div className="flex items-center gap-1.5 text-xs text-slate-300 font-semibold mb-3 font-anek bg-slate-900/60 px-2.5 py-1.5 rounded-xl border border-white/5">
-                      <Clock className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>{slot.formattedTime}</span>
-                    </div>
-
-                    {/* Subject & Topic (for study) */}
-                    {isStudy ? (
-                      <div className="space-y-2 mb-4">
-                        <div>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border inline-block mb-1 ${slot.categoryTagColor || 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'}`}>
-                            {slot.categoryTag}
-                          </span>
-                          <h4 className={`text-base font-bold ${isDone ? 'line-through text-slate-400' : 'text-white'}`}>
-                            {slot.subjectTitle}
-                          </h4>
-                          <p className={`text-xs mt-1 leading-relaxed ${isDone ? 'text-slate-500' : 'text-slate-300'}`}>
-                            {slot.focusTopic}
-                          </p>
-                        </div>
-
-                        {/* Assigned Task Pill */}
-                        {slot.assignedTaskTitle && (
-                          <div className={`px-2.5 py-1 rounded-xl text-xs font-bold border inline-flex items-center gap-1.5 ${slot.taskBadgeColor}`}>
-                            <span>{slot.assignedTaskTitle}</span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="mb-4">
-                        <p className="text-xs text-slate-300 leading-relaxed">
-                          {slot.focusTopic}
-                        </p>
-                      </div>
-                    )}
+                    <h5 className="font-bold text-slate-200">{slot.periodName}</h5>
+                    <p className="text-[11px] text-slate-400">{slot.focusTopic}</p>
                   </div>
-
-                  {/* Slot Footer & Checkbox */}
-                  <div className="pt-3 border-t border-white/5 flex items-center justify-between gap-2">
-                    {isStudy ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleTask(slot.id)}
-                          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer select-none ${
-                            isDone
-                              ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                              : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10'
-                          }`}
-                        >
-                          <div className={`w-4 h-4 rounded-md flex items-center justify-center border transition-colors ${
-                            isDone ? 'bg-slate-950 text-emerald-400 border-transparent' : 'border-slate-500'
-                          }`}>
-                            {isDone && <Check className="w-3 h-3 stroke-[3]" />}
-                          </div>
-                          <span>{isDone ? 'পড়া সম্পন্ন ✓' : 'সম্পন্ন করুন'}</span>
-                        </button>
-
-                        {slot.isCustom && (
-                          <button
-                            onClick={() => removeCustomSlot(slot.id)}
-                            title="স্লট ডিলিট করুন"
-                            className="p-1.5 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-[11px] font-semibold text-slate-400 font-anek">
-                        নির্ধারিত দৈনিক সময়
-                      </span>
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ============================================================== */}
-        {/* 5. ADD CUSTOM SLOT MODAL                                       */}
-        {/* ============================================================== */}
-        {showAddCustomModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-            <motion.form
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              onSubmit={handleAddCustom}
-              className="w-full max-w-md p-6 rounded-3xl bg-slate-900 border border-white/10 shadow-2xl text-xs"
-            >
-              <h4 className="text-sm font-bold text-white mb-4 flex items-center gap-2 font-jakarta">
-                <Plus className="w-4 h-4 text-cyan-400" />
-                <span>নতুন পড়ার স্লট যুক্ত করুন</span>
-              </h4>
-
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">বিষয় বা সাবজেক্টের নাম</label>
-                  <input
-                    type="text"
-                    value={customSubject}
-                    onChange={(e) => setCustomSubject(e.target.value)}
-                    placeholder="যেমন: ইংরেজি ২য় পত্র / জীববিজ্ঞান"
-                    required
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
-                  />
                 </div>
 
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">পড়ার নির্দিষ্ট টপিক বা অধ্যায়</label>
-                  <input
-                    type="text"
-                    value={customTopic}
-                    onChange={(e) => setCustomTopic(e.target.value)}
-                    placeholder="যেমন: Right forms of verbs ৩টি নিয়ম অনুশীলন"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">সময়সীমা</label>
-                  <input
-                    type="text"
-                    value={customTime}
-                    onChange={(e) => setCustomTime(e.target.value)}
-                    placeholder="যেমন: ০৪:০০ PM - ০৫:০০ PM"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 font-anek"
-                  />
+                <div className="shrink-0">
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-800/60 text-slate-400">
+                    লাইফস্টাইল
+                  </span>
                 </div>
               </div>
-
-              <div className="flex justify-end gap-2 mt-5">
-                <button
-                  type="button"
-                  onClick={() => setShowAddCustomModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition-colors cursor-pointer"
-                >
-                  বাতিল
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:opacity-90 text-slate-950 font-bold transition-all shadow-md cursor-pointer"
-                >
-                  স্লট সেভ করুন
-                </button>
-              </div>
-            </motion.form>
-          </div>
-        )}
-
-        {/* ============================================================== */}
-        {/* 6. STUDY ADVICE & COGNITIVE SCIENCE CARD                       */}
-        {/* ============================================================== */}
-        <div className="mt-8 p-5 rounded-2xl bg-gradient-to-r from-amber-950/25 via-slate-900 to-slate-900 border border-amber-500/25 flex items-start gap-3.5 shadow-md">
-          <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div className="text-xs leading-relaxed text-amber-200/90">
-            <span className="font-bold text-amber-300 block mb-1 font-jakarta">
-              SSC CANDIDATE'S SCIENTIFIC TIME-BLOCKING SECRETS:
-            </span>
-            ১. <strong>ভোরের স্লট (Dawn Study)</strong>: মস্তিষ্ক সতেজ থাকায় গণিত ও বিজ্ঞানের মতো গভীর মনোযোগের বিষয়ের মৌলিক ধারণা স্পষ্টকরণে (Concept Clear) ব্যবহার করুন।<br />
-            ২. <strong>সন্ধ্যার স্লট (Evening Focus)</strong>: সৃজনশীল প্রশ্ন (CQ Solve) সমাধান ও টাইমিং প্র্যাকটিসের জন্য আদর্শ।<br />
-            ৩. <strong>নৈশ রিভিশন (Night Mastery)</strong>: ঘুমানোর পূর্বে বহুনির্বাচনী প্রশ্ন (MCQ Solve) এবং {religionSubject.name}-এর গুরুত্বপূর্ণ পাঠ রিভিশন দিলে ঘুমে তা স্মৃতিতে স্থায়ী হয়।
-          </div>
+            );
+          })}
         </div>
-      </motion.div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 6. EXAM CONFIGURATION MODAL OVERLAY                                       */}
+      {/* ========================================================================= */}
+      <ExamTargetConfigModal
+        isOpen={showConfigModal}
+        onClose={() => setShowConfigModal(false)}
+        onSave={handleSaveExamConfig}
+        currentConfig={examConfig}
+        totalChaptersInScope={fittingMetrics.totalActiveChapters}
+      />
     </div>
   );
 };

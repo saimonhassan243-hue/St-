@@ -1,4 +1,4 @@
-import { FirebaseUserData, ChapterProgressData } from '../types';
+import { FirebaseUserData, ChapterProgressData, ExamConfigData } from '../types';
 import { RTDB_BASE_URL, firebaseConfig } from './firebaseConfig';
 import { toBengaliNumber } from '../utils/progressCalculator';
 import { getDeviceSecurityInfo } from './deviceSecurityService';
@@ -10,6 +10,7 @@ export const STORAGE_KEY_AUTH_USER = 'ssc_auth_active_user_v1';
 export const STORAGE_KEY_AUTH_TOKEN = 'ssc_auth_session_token_v1';
 export const STORAGE_KEY_ONBOARDING_DONE = 'ssc_onboarding_completed_v1';
 export const STORAGE_KEY_SYLLABUS_CONFIGURED = 'ssc_syllabus_configured_v1';
+export const STORAGE_KEY_EXAM_CONFIG = 'ssc_exam_config_v1';
 
 /**
  * Sanitize email or ID to be a safe Firebase Realtime Database node key
@@ -167,6 +168,101 @@ export async function fetchSyllabusConfigFromFirebase(
     if (!userId) return null;
     const safeId = sanitizeUserId(userId);
     const endpoint = `${RTDB_BASE_URL}/users/${safeId}/syllabus_config.json`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get local exam configuration
+ */
+export function getLocalExamConfig(): ExamConfigData | null {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_EXAM_CONFIG);
+    if (saved) return JSON.parse(saved);
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/**
+ * Save local exam configuration
+ */
+export function saveLocalExamConfig(config: ExamConfigData): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_EXAM_CONFIG, JSON.stringify(config));
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Sync Exam Target Configuration to Firebase Realtime Database at /users/{userId}/exam_config.json
+ */
+export async function syncExamConfigToFirebase(
+  userId: string,
+  examConfig: ExamConfigData
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!userId) return { success: false, error: 'No user ID provided' };
+    const safeId = sanitizeUserId(userId);
+    const endpoint = `${RTDB_BASE_URL}/users/${safeId}/exam_config.json`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    const response = await fetch(endpoint, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        ...examConfig,
+        updatedAt: examConfig.updatedAt || new Date().toISOString(),
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Firebase exam config write failed: ${response.status}`);
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.warn('Firebase exam config sync notice:', err);
+    return { success: false, error: err?.message };
+  }
+}
+
+/**
+ * Fetch Exam Target Configuration from Firebase Realtime Database at /users/{userId}/exam_config.json
+ */
+export async function fetchExamConfigFromFirebase(
+  userId: string
+): Promise<ExamConfigData | null> {
+  try {
+    if (!userId) return null;
+    const safeId = sanitizeUserId(userId);
+    const endpoint = `${RTDB_BASE_URL}/users/${safeId}/exam_config.json`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);

@@ -914,9 +914,18 @@ export default function StudentDashboard() {
                   chapterProgress={userState.chapters}
                   customSelectedChapterIds={userState.customSelectedChapterIds}
                   examDate={userState.examDate || '2028-02-15'}
+                  examConfig={userState.examConfig}
                   sscBatch={userState.profile?.sscBatch || '2028'}
+                  currentUser={currentUser}
                   onUpdateProgressData={handleUpdateProgressData}
                   onNavigateToSyllabus={() => setActiveTab('syllabus')}
+                  onUpdateExamConfig={(config) => {
+                    setUserState((prev) => ({
+                      ...prev,
+                      examDate: config.examDate,
+                      examConfig: config,
+                    }));
+                  }}
                 />
               </motion.div>
             )}
