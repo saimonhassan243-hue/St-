@@ -71,7 +71,7 @@ jobs:
           retention-days: 30
 
       - name: Upload APK to Google Drive
-        uses: injectivelabs/gdrive-upload-action@v1.0
+        uses: adityakresna/gdrive-upload-action@master
         with:
           credentials: ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
           folderId: '1yQ4AKkNopspzEUpCYcuEci2KLl2mIhkF'
