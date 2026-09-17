@@ -44,22 +44,20 @@ jobs:
       - name: Grant Execute Permission to Gradle
         run: chmod +x android/gradlew
 
-      - name: Build Android Release APK
+      - name: Build Android Installable Debug APK
         run: |
           cd android
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
       - name: Copy & Prepare APK Output
         run: |
           mkdir -p output
-          if [ -f "android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
-            cp android/app/build/outputs/apk/release/app-release-unsigned.apk output/ssc-tracker.apk
+          if [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+            cp android/app/build/outputs/apk/debug/app-debug.apk output/ssc-tracker.apk
           elif [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
             cp android/app/build/outputs/apk/release/app-release.apk output/ssc-tracker.apk
-          elif [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
-            cp android/app/build/outputs/apk/debug/app-debug.apk output/ssc-tracker.apk
           else
-            echo "Error: No APK file found in build outputs"
+            echo "Error: No installable APK file found in build outputs"
             exit 1
           fi
           ls -lh output/ssc-tracker.apk
@@ -77,13 +75,14 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           name: "SSC Prep & Tracker Release v1.0.${{ github.run_number }}"
           body: |
-            ### 📱 SSC Prep & Routine Tracker - Production APK Release
+            ### 📱 SSC Prep & Routine Tracker - Installable Android APK Release
             - **Build Number**: #${{ github.run_number }}
             - **Commit**: `${{ github.sha }}`
             - **Branch**: `${{ github.ref_name }}`
+            - **Package Type**: Signed Installable APK (Ready for direct sideloading)
 
-            #### 📥 Direct Download
-            Download the attached `ssc-tracker.apk` below and install it directly on your Android phone.
+            #### 📥 Direct Download & Installation
+            Download the attached `ssc-tracker.apk` below and install it directly on any Android device without signing errors.
           files: output/ssc-tracker.apk
           draft: false
           prerelease: false
