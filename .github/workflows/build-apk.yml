@@ -27,10 +27,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
 
       - name: Install Dependencies
-        run: npm ci || npm install
+        run: npm install
 
       - name: Build Web Application
         run: npm run build
@@ -42,32 +41,39 @@ jobs:
           fi
           npx cap sync android
 
-      - name: Build Android App (Release & Debug)
+      - name: Grant Execute Permission to Gradle
+        run: chmod +x android/gradlew
+
+      - name: Build Android Release APK
         run: |
           cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
-      - name: Copy & Prepare APK Artifacts
+      - name: Copy & Prepare APK Output
         run: |
-          mkdir -p output-apk
-          cp android/app/build/outputs/apk/debug/app-debug.apk output-apk/SSC-Master-App.apk
+          mkdir -p output
+          if [ -f "android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
+            cp android/app/build/outputs/apk/release/app-release-unsigned.apk output/ssc-tracker.apk
+          elif [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk output/ssc-tracker.apk
+          elif [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+            cp android/app/build/outputs/apk/debug/app-debug.apk output/ssc-tracker.apk
+          else
+            echo "Error: No APK file found in build outputs"
+            exit 1
+          fi
 
-      - name: Upload APK Artifacts (GitHub Actions)
+      - name: Upload APK to GitHub Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SSC-Master-App-APK
-          path: output-apk/SSC-Master-App.apk
+          name: ssc-tracker-apk
+          path: output/ssc-tracker.apk
+          retention-days: 30
 
-      - name: Create Automatic GitHub Release
-        uses: softprops/action-gh-release@v2
-        if: github.ref == 'refs/heads/main'
+      - name: Upload APK to Google Drive
+        uses: injectivelabs/gdrive-upload-action@v1.0
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: SSC Master App Release v1.0.${{ github.run_number }}
-          body: |
-            Automated production build for SSC Master Platform.
-            - All AI modules & Firebase sync integrated.
-          files: output-apk/SSC-Master-App.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          credentials: ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
+          folderId: '1yQ4AKkNopspzEUpCYcuEci2KLl2mIhkF'
+          filename: 'output/ssc-tracker.apk'
+          overwrite: 'true'

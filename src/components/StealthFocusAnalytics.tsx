@@ -119,7 +119,7 @@ export const StealthFocusAnalytics: React.FC<StealthFocusAnalyticsProps> = ({
                   JSON.stringify({ date: todayStr, minutes: updated })
                 );
               } catch (e) {
-                console.error(e);
+                console.warn('Focus metrics storage note:', e);
               }
               return updated;
             });

@@ -70,7 +70,7 @@ export const SpeedMemoryFlashCardsModal: React.FC<SpeedMemoryFlashCardsModalProp
       try {
         localStorage.setItem(STORAGE_KEY_MASTERED_CARDS, JSON.stringify(next));
       } catch (e) {
-        console.error(e);
+        console.warn('Flashcard storage save note:', e);
       }
       return next;
     });

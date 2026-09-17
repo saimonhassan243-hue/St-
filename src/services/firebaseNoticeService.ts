@@ -129,7 +129,7 @@ export async function updateGlobalNotice(
 
     return { success: true, data: savedData || updatedData };
   } catch (error: any) {
-    console.error('Firebase RTDB update failed:', error);
+    console.warn('Firebase RTDB update note (offline cache fallback):', error);
     // Even if remote network fails, save to local cache for emergency offline behavior
     try {
       localStorage.setItem(STORAGE_KEY_NOTICE, JSON.stringify(updatedData));

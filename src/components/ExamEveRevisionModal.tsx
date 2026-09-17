@@ -69,7 +69,7 @@ export const ExamEveRevisionModal: React.FC<ExamEveRevisionModalProps> = ({
       try {
         localStorage.setItem(STORAGE_KEY_EQUIPMENT, JSON.stringify(next));
       } catch (e) {
-        console.error(e);
+        console.warn('Storage save note:', e);
       }
       return next;
     });
