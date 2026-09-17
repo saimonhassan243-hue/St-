@@ -28,12 +28,7 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Setup Python 3.x
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Install Node Dependencies
+      - name: Install Dependencies
         run: npm install
 
       - name: Build Web Application
@@ -76,88 +71,21 @@ jobs:
           path: output/ssc-tracker.apk
           retention-days: 30
 
-      - name: Install Google Drive Upload Dependencies
-        run: pip install --upgrade google-api-python-client google-auth
+      - name: Create Automatic GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: "SSC Prep & Tracker Release v1.0.${{ github.run_number }}"
+          body: |
+            ### 📱 SSC Prep & Routine Tracker - Production APK Release
+            - **Build Number**: #${{ github.run_number }}
+            - **Commit**: `${{ github.sha }}`
+            - **Branch**: `${{ github.ref_name }}`
 
-      - name: Upload APK to Google Drive via Python
+            #### 📥 Direct Download
+            Download the attached `ssc-tracker.apk` below and install it directly on your Android phone.
+          files: output/ssc-tracker.apk
+          draft: false
+          prerelease: false
         env:
-          GDRIVE_SERVICE_ACCOUNT: ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
-          TARGET_FOLDER_ID: "1yQ4AKkNopspzEUpCYcuEci2KLl2mIhkF"
-          FILE_PATH: "output/ssc-tracker.apk"
-        run: |
-          python3 - << 'EOF'
-          import os
-          import sys
-          import json
-          import base64
-          from google.oauth2 import service_account
-          from googleapiclient.discovery import build
-          from googleapiclient.http import MediaFileUpload
-
-          raw_sa = os.environ.get('GDRIVE_SERVICE_ACCOUNT', '').strip()
-          folder_id = os.environ.get('TARGET_FOLDER_ID', '').strip()
-          file_path = os.environ.get('FILE_PATH', '').strip()
-
-          if not raw_sa:
-              print("Error: GDRIVE_SERVICE_ACCOUNT secret is missing or empty.")
-              sys.exit(1)
-
-          if not os.path.exists(file_path):
-              print(f"Error: Target file not found at {file_path}")
-              sys.exit(1)
-
-          # Parse JSON (supports raw JSON string or base64 encoded JSON)
-          try:
-              if raw_sa.startswith('{'):
-                  sa_info = json.loads(raw_sa)
-              else:
-                  sa_info = json.loads(base64.b64decode(raw_sa).decode('utf-8'))
-          except Exception as e:
-              print(f"Error parsing service account credentials JSON: {e}")
-              sys.exit(1)
-
-          scopes = ['https://www.googleapis.com/auth/drive']
-          creds = service_account.Credentials.from_service_account_info(sa_info, scopes=scopes)
-          drive_service = build('drive', 'v3', credentials=creds)
-
-          file_name = os.path.basename(file_path)
-
-          # Check if existing file exists in the destination folder to overwrite/update
-          query = f"name = '{file_name}' and '{folder_id}' in parents and trashed = false"
-          existing_files = drive_service.files().list(
-              q=query,
-              fields='files(id, name)',
-              supportsAllDrives=True,
-              includeItemsFromAllDrives=True
-          ).execute().get('files', [])
-
-          media = MediaFileUpload(file_path, mimetype='application/vnd.android.package-archive', resumable=True)
-
-          if existing_files:
-              existing_id = existing_files[0]['id']
-              print(f"Overwriting existing file on Google Drive (File ID: {existing_id})...")
-              updated_file = drive_service.files().update(
-                  fileId=existing_id,
-                  media_body=media,
-                  fields='id, name, webViewLink',
-                  supportsAllDrives=True
-              ).execute()
-              print(f"Successfully updated APK in Google Drive!")
-              print(f"File ID: {updated_file.get('id')}")
-              print(f"Link: {updated_file.get('webViewLink')}")
-          else:
-              print(f"Uploading new file to Google Drive folder '{folder_id}'...")
-              file_metadata = {
-                  'name': file_name,
-                  'parents': [folder_id]
-              }
-              new_file = drive_service.files().create(
-                  body=file_metadata,
-                  media_body=media,
-                  fields='id, name, webViewLink',
-                  supportsAllDrives=True
-              ).execute()
-              print(f"Successfully uploaded APK to Google Drive!")
-              print(f"File ID: {new_file.get('id')}")
-              print(f"Link: {new_file.get('webViewLink')}")
-          EOF
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
