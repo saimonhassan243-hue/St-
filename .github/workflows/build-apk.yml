@@ -124,7 +124,12 @@ jobs:
 
           # Check if existing file exists in the destination folder to overwrite/update
           query = f"name = '{file_name}' and '{folder_id}' in parents and trashed = false"
-          existing_files = drive_service.files().list(q=query, fields='files(id, name)').execute().get('files', [])
+          existing_files = drive_service.files().list(
+              q=query,
+              fields='files(id, name)',
+              supportsAllDrives=True,
+              includeItemsFromAllDrives=True
+          ).execute().get('files', [])
 
           media = MediaFileUpload(file_path, mimetype='application/vnd.android.package-archive', resumable=True)
 
@@ -134,7 +139,8 @@ jobs:
               updated_file = drive_service.files().update(
                   fileId=existing_id,
                   media_body=media,
-                  fields='id, name, webViewLink'
+                  fields='id, name, webViewLink',
+                  supportsAllDrives=True
               ).execute()
               print(f"Successfully updated APK in Google Drive!")
               print(f"File ID: {updated_file.get('id')}")
@@ -148,7 +154,8 @@ jobs:
               new_file = drive_service.files().create(
                   body=file_metadata,
                   media_body=media,
-                  fields='id, name, webViewLink'
+                  fields='id, name, webViewLink',
+                  supportsAllDrives=True
               ).execute()
               print(f"Successfully uploaded APK to Google Drive!")
               print(f"File ID: {new_file.get('id')}")
