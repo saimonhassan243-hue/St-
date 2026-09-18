@@ -51,6 +51,14 @@ import { BoardPredictionMatrixModal } from './components/BoardPredictionMatrixMo
 import { ActiveRecallTimerModal } from './components/ActiveRecallTimerModal';
 import { MathScienceCanvasModal } from './components/MathScienceCanvasModal';
 import { SpeedMemoryFlashCardsModal } from './components/SpeedMemoryFlashCardsModal';
+import { CyberDashboardView } from './components/CyberDashboardView';
+import { BacklogVaultView } from './components/BacklogVaultView';
+import { MegaBankView } from './components/MegaBankView';
+import { LeaderboardView } from './components/LeaderboardView';
+import { BacklogRecoveryModal } from './components/BacklogRecoveryModal';
+import { XpAchievementCelebrationModal } from './components/XpAchievementCelebrationModal';
+import { AiStudyReminderModal } from './components/AiStudyReminderModal';
+import { CyberpunkParticleBackground } from './components/CyberpunkParticleBackground';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { EmergencyBroadcastLockOverlay } from './components/EmergencyBroadcastLockOverlay';
 import { SystemAdminPanel } from './components/SystemAdminPanel';
@@ -105,8 +113,8 @@ const DEFAULT_PROFILE: UserProfile = {
 };
 
 export default function StudentDashboard() {
-  // ১. মাস্টার নেভিগেশন স্টেট: ৬টি অপশন
-  const [activeTab, setActiveTab] = useState<NavTabKey>('profile');
+  // ১. মাস্টার নেভিগেশন স্টেট
+  const [activeTab, setActiveTab] = useState<NavTabKey>('dashboard');
   const [isSyllabusConfiguredState, setIsSyllabusConfiguredState] = useState<boolean>(() => {
     return isSyllabusConfiguredCheck();
   });
@@ -190,6 +198,9 @@ export default function StudentDashboard() {
   const [showPredictionModal, setShowPredictionModal] = useState<boolean>(false);
   const [showEveModeModal, setShowEveModeModal] = useState<boolean>(false);
   const [showFlashCardsModal, setShowFlashCardsModal] = useState<boolean>(false);
+  const [showBacklogRecoveryModal, setShowBacklogRecoveryModal] = useState<boolean>(false);
+  const [showAchievementsModal, setShowAchievementsModal] = useState<boolean>(false);
+  const [showReminderModal, setShowReminderModal] = useState<boolean>(false);
   const [activeMindMapChapter, setActiveMindMapChapter] = useState<string | null>(null);
   const [activeAudioChapter, setActiveAudioChapter] = useState<string | null>(null);
   const [activeRecallChapter, setActiveRecallChapter] = useState<string | null>(null);
@@ -655,28 +666,37 @@ export default function StudentDashboard() {
 
   return (
     <ErrorBoundary onReset={handleSystemRestore}>
-      <div className="min-h-screen bg-[#0F172A] text-slate-100 font-hind selection:bg-indigo-500/30 selection:text-indigo-200 relative overflow-x-hidden flex flex-col justify-between">
+      <div className="min-h-screen bg-[#0A0E17] text-slate-100 font-hind selection:bg-cyan-500/30 selection:text-cyan-200 relative overflow-x-hidden flex flex-col justify-between">
+        {/* Dynamic Cyberpunk Particle Background */}
+        <CyberpunkParticleBackground />
+
         {/* Background ambient gradient glow */}
-        <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-b from-indigo-900/20 via-slate-900/0 to-transparent pointer-events-none -z-10" />
+        <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-b from-cyan-900/15 via-purple-900/10 to-transparent pointer-events-none -z-10" />
 
         {/* Master Top Navigation Bar */}
-        <header className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:py-3.5">
+        <header className="sticky top-0 z-40 bg-slate-950/85 backdrop-blur-2xl border-b border-cyan-500/20 px-4 py-3 sm:py-3.5 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
           <div className="max-w-6xl mx-auto flex flex-col lg:flex-row justify-between items-center gap-3">
             
             {/* Student & Brand Identity */}
             <div className="flex items-center justify-between w-full lg:w-auto gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 p-0.5 shadow-lg shadow-indigo-500/25">
-                  <div className="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center">
-                    <GraduationCap className="w-5 h-5 text-amber-300" />
+                <div 
+                  onClick={() => setActiveTab('dashboard')}
+                  className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-500 via-indigo-500 to-purple-500 p-0.5 shadow-lg shadow-cyan-500/25 cursor-pointer hover:scale-105 transition-transform"
+                >
+                  <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
+                    <Sparkles className="w-5 h-5 text-cyan-400" />
                   </div>
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h1 className="text-sm sm:text-base font-bold text-white tracking-wide font-jakarta">
-                      SSC MASTER PLATFORM
-                    </h1>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-anek">
+                    <h2 
+                      onClick={() => setActiveTab('dashboard')}
+                      className="text-base sm:text-lg font-bold font-jakarta text-white tracking-tight cursor-pointer hover:text-cyan-400 transition-colors"
+                    >
+                      STUDY OS <span className="text-cyan-400 text-xs font-mono font-normal">MEGA v4.5</span>
+                    </h2>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
                       {userState.profile.sscBatch}
                     </span>
                   </div>
@@ -724,7 +744,7 @@ export default function StudentDashboard() {
               {/* Active Religion Pill */}
               <button
                 onClick={() => handleTabSelect('syllabus')}
-                className="px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold font-anek flex items-center gap-1.5 transition-all hover:bg-amber-500/25"
+                className="px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold font-anek flex items-center gap-1.5 transition-all hover:bg-amber-500/25 cursor-pointer"
               >
                 <Bookmark className="w-3.5 h-3.5 text-amber-400" />
                 <span>ধর্ম: {religionSubject.name}</span>
@@ -733,15 +753,12 @@ export default function StudentDashboard() {
               {/* Header Tab Quick Links */}
               <div className="hidden xl:flex bg-slate-900/90 p-1 rounded-2xl border border-white/10 shadow-inner overflow-x-auto no-scrollbar">
                 {[
-                  { id: 'profile' as NavTabKey, label: 'প্রোফাইল', icon: User },
-                  { id: 'syllabus' as NavTabKey, label: 'সিলেবাস', icon: BookOpen },
+                  { id: 'dashboard' as NavTabKey, label: 'ড্যাশবোর্ড', icon: Sparkles },
                   { id: 'routine' as NavTabKey, label: 'রুটিন', icon: Calendar },
-                  { id: 'weakpoints' as NavTabKey, label: 'দুর্বল পয়েন্ট', icon: AlertTriangle },
-                  { id: 'gamification' as NavTabKey, label: 'রিওয়ার্ড', icon: Award },
-                  { id: 'analytics' as NavTabKey, label: 'এনালাইটিক্স', icon: BarChart3 },
-                  { id: 'progress' as NavTabKey, label: 'প্রোগ্রেস', icon: Target },
-                  { id: 'suggestions' as NavTabKey, label: 'সাজেশন', icon: Star },
-                  { id: 'countdown' as NavTabKey, label: 'কাউন্টডাউন', icon: Timer },
+                  { id: 'backlog' as NavTabKey, label: 'ব্যাকলগ ভল্ট', icon: RotateCcw },
+                  { id: 'megabank' as NavTabKey, label: 'মেগা ব্যাংক', icon: BookOpen },
+                  { id: 'leaderboard' as NavTabKey, label: 'লিডারবোর্ড', icon: Award },
+                  { id: 'syllabus' as NavTabKey, label: 'সিলেবাস', icon: Target },
                 ].map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
@@ -750,7 +767,7 @@ export default function StudentDashboard() {
                       key={tab.id}
                       onClick={() => handleTabSelect(tab.id)}
                       className={`relative px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 z-10 whitespace-nowrap cursor-pointer ${
-                        isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+                        isActive ? 'text-white font-bold' : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
                       <Icon className="w-3.5 h-3.5" />
@@ -758,7 +775,7 @@ export default function StudentDashboard() {
                       {isActive && (
                         <motion.div
                           layoutId="headerActivePill"
-                          className="absolute inset-0 bg-indigo-600 rounded-xl -z-10 shadow-md shadow-indigo-600/40"
+                          className="absolute inset-0 bg-gradient-to-r from-cyan-600 to-indigo-600 rounded-xl -z-10 shadow-md shadow-cyan-600/30"
                           transition={{ type: 'spring', stiffness: 450, damping: 30 }}
                         />
                       )}
@@ -808,6 +825,34 @@ export default function StudentDashboard() {
 
               <button
                 type="button"
+                onClick={() => setShowBacklogRecoveryModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-500/20 to-amber-500/20 hover:from-rose-500/30 hover:to-amber-500/30 border border-rose-500/40 text-rose-300 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              >
+                <span className="text-sm">🗄️</span>
+                <span>ব্যাকলগ রিকভারি</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-rose-500 text-white font-black">AI</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowReminderModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 border border-cyan-500/40 text-cyan-300 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              >
+                <span className="text-sm">🔔</span>
+                <span>AI স্টাডি রিমাইন্ডার</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowAchievementsModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-yellow-500/20 hover:from-amber-500/30 hover:to-yellow-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              >
+                <span className="text-sm">🏆</span>
+                <span>XP ও অর্জন</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setShowEveModeModal(true)}
                 className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
               >
@@ -840,9 +885,9 @@ export default function StudentDashboard() {
               </button>
             </div>
 
-            <div className="hidden md:flex items-center gap-2 text-[11px] text-slate-400 font-sans shrink-0">
-              <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>SSC Board Rank #1 Engine Active</span>
+            <div className="hidden md:flex items-center gap-2 text-[11px] text-cyan-300 font-mono shrink-0">
+              <span className="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+              <span>1000+ NCTB MEGA SUITE ACTIVE</span>
             </div>
           </div>
         </header>
@@ -850,6 +895,90 @@ export default function StudentDashboard() {
         {/* কন্টেন্ট এরিয়া (Ample bottom padding pb-28 sm:pb-32 for the Floating Bottom Bar) */}
         <main className="max-w-6xl mx-auto px-4 mt-6 sm:mt-8 pb-28 sm:pb-32 w-full flex-1">
           <AnimatePresence mode="wait">
+            {/* 0. 🌌 ড্যাশবোর্ড (Dashboard) */}
+            {activeTab === 'dashboard' && (
+              <motion.div
+                key="tab-dashboard"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25 }}
+              >
+                <CyberDashboardView
+                  profile={userState.profile}
+                  subjects={allActiveSubjects}
+                  chapterProgress={userState.chapters}
+                  examDate={userState.examDate}
+                  onNavigateTab={handleTabSelect}
+                  onOpenFlashcards={() => setShowFlashCardsModal(true)}
+                  onOpenEveMode={() => setShowEveModeModal(true)}
+                  onOpenPredictionMatrix={() => setShowPredictionModal(true)}
+                  onOpenAchievementsModal={() => setShowAchievementsModal(true)}
+                  onOpenReminderModal={() => setShowReminderModal(true)}
+                  onOpenBacklogRecoveryModal={() => setShowBacklogRecoveryModal(true)}
+                />
+              </motion.div>
+            )}
+
+            {/* 🗄️ ব্যাকলগ ভল্ট (Backlog Vault) */}
+            {activeTab === 'backlog' && (
+              <motion.div
+                key="tab-backlog"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25 }}
+              >
+                <BacklogVaultView
+                  subjects={allActiveSubjects}
+                  chapterProgress={userState.chapters}
+                  onTriggerDidNotStudyToday={() => setShowBacklogRecoveryModal(true)}
+                  onNavigateToRoutine={() => handleTabSelect('routine')}
+                  onNavigateToSyllabus={() => handleTabSelect('syllabus')}
+                  onOpenRecoveryModal={() => setShowBacklogRecoveryModal(true)}
+                />
+              </motion.div>
+            )}
+
+            {/* 🏛️ মেগা ব্যাংক ও ফর্মুলা ভল্ট (Mega Bank) */}
+            {activeTab === 'megabank' && (
+              <motion.div
+                key="tab-megabank"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25 }}
+              >
+                <MegaBankView
+                  subjects={allActiveSubjects}
+                  onOpenFlashcards={() => setShowFlashCardsModal(true)}
+                  onOpenPractice={(chapterName) => {
+                    setPracticeChapterFilter(chapterName);
+                    setActiveTab('practice');
+                  }}
+                  onOpenEveMode={() => setShowEveModeModal(true)}
+                  onOpenPredictionMatrix={() => setShowPredictionModal(true)}
+                />
+              </motion.div>
+            )}
+
+            {/* 🏆 লিডারবোর্ড ও গ্লোবাল র‍্যাঙ্কিং (Leaderboard) */}
+            {activeTab === 'leaderboard' && (
+              <motion.div
+                key="tab-leaderboard"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25 }}
+              >
+                <LeaderboardView
+                  profile={userState.profile}
+                  onOpenAchievements={() => setShowAchievementsModal(true)}
+                  onNavigateToRoutine={() => handleTabSelect('routine')}
+                />
+              </motion.div>
+            )}
+
             {/* 1. 👤 প্রোফাইল (Profile) */}
             {activeTab === 'profile' && (
               <motion.div
@@ -1317,6 +1446,33 @@ export default function StudentDashboard() {
         <SpeedMemoryFlashCardsModal
           isOpen={showFlashCardsModal}
           onClose={() => setShowFlashCardsModal(false)}
+        />
+
+        {/* Dynamic Backlog Auto-Recovery Engine Modal */}
+        <BacklogRecoveryModal
+          isOpen={showBacklogRecoveryModal}
+          onClose={() => setShowBacklogRecoveryModal(false)}
+          subjects={allActiveSubjects}
+          chapterProgress={userState.chapters}
+          onApplyPlan={() => {
+            setShowBacklogRecoveryModal(false);
+            setActiveTab('routine');
+          }}
+        />
+
+        {/* Dynamic XP & Gamification Achievement Modal */}
+        <XpAchievementCelebrationModal
+          isOpen={showAchievementsModal}
+          onClose={() => setShowAchievementsModal(false)}
+          earnedXp={250}
+          currentStreak={userState.profile.streakDays || 15}
+          currentLevel={5}
+        />
+
+        {/* AI Dynamic Study Reminder Modal */}
+        <AiStudyReminderModal
+          isOpen={showReminderModal}
+          onClose={() => setShowReminderModal(false)}
         />
 
         {/* 5-Minute Silent Active Recall Timer Modal */}

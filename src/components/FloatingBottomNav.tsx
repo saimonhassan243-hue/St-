@@ -14,7 +14,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
-  Moon
+  Moon,
+  Database,
+  Archive,
+  Trophy,
+  LayoutDashboard,
+  Sparkles
 } from 'lucide-react';
 import { NavTabKey } from '../types';
 
@@ -25,21 +30,21 @@ interface NavOption {
   icon: React.ElementType;
   accent: string;
   badge?: string;
-  isNew?: boolean;
+  isPrimary?: boolean;
 }
 
 const NAV_OPTIONS: NavOption[] = [
-  { id: 'profile', label: 'প্রোফাইল', shortLabel: 'প্রোফাইল', icon: User, accent: 'from-indigo-500 to-indigo-600' },
+  { id: 'dashboard', label: 'ড্যাশবোর্ড', shortLabel: 'ড্যাশবোর্ড', icon: LayoutDashboard, accent: 'from-cyan-500 to-blue-600', isPrimary: true },
+  { id: 'routine', label: 'রুটিন', shortLabel: 'রুটিন', icon: Calendar, accent: 'from-blue-500 to-indigo-600', isPrimary: true },
+  { id: 'backlog', label: 'ব্যাকলগ ভল্ট', shortLabel: 'ব্যাকলগ', icon: Archive, accent: 'from-rose-500 to-amber-600', badge: 'AI', isPrimary: true },
+  { id: 'megabank', label: 'মেগা ব্যাংক', shortLabel: 'মেগা ব্যাংক', icon: Database, accent: 'from-purple-500 to-pink-600', badge: 'NEW', isPrimary: true },
+  { id: 'leaderboard', label: 'লিডারবোর্ড', shortLabel: 'লিডারবোর্ড', icon: Trophy, accent: 'from-amber-400 to-yellow-500', isPrimary: true },
   { id: 'syllabus', label: 'সিলেবাস', shortLabel: 'সিলেবাস', icon: BookOpen, accent: 'from-blue-500 to-indigo-600' },
-  { id: 'routine', label: 'রুটিন', shortLabel: 'রুটিন', icon: Calendar, accent: 'from-cyan-500 to-blue-600' },
-  { id: 'practice', label: 'AI প্র্যাকটিস ও CQ', shortLabel: 'AI টেস্ট', icon: Zap, accent: 'from-purple-500 to-indigo-600', isNew: true, badge: 'AI' },
-  { id: 'eve_mode', label: 'পরীক্ষার আগের রাত', shortLabel: 'এক্সাম নাইট', icon: Moon, accent: 'from-amber-400 to-orange-500', isNew: true, badge: 'HOT' },
-  { id: 'weakpoints', label: 'দুর্বল পয়েন্ট', shortLabel: 'দুর্বল পয়েন্ট', icon: AlertTriangle, accent: 'from-rose-500 to-amber-600', isNew: true },
-  { id: 'gamification', label: 'রিওয়ার্ড ও স্ট্রিক', shortLabel: 'রিওয়ার্ড', icon: Award, accent: 'from-amber-400 to-orange-500', isNew: true },
-  { id: 'analytics', label: 'এনালাইটিক্স', shortLabel: 'এনালাইটিক্স', icon: BarChart3, accent: 'from-emerald-500 to-cyan-600', isNew: true },
-  { id: 'progress', label: 'প্রোগ্রেস', shortLabel: 'প্রোগ্রেস', icon: Target, accent: 'from-teal-500 to-emerald-600' },
-  { id: 'suggestions', label: 'সাজেশন', shortLabel: 'সাজেশন', icon: Star, accent: 'from-amber-400 to-amber-600' },
-  { id: 'countdown', label: 'কাউন্টডাউন', shortLabel: 'কাউন্টডাউন', icon: Timer, accent: 'from-purple-500 to-pink-600' },
+  { id: 'practice', label: 'AI প্র্যাকটিস ও CQ', shortLabel: 'AI টেস্ট', icon: Zap, accent: 'from-purple-500 to-indigo-600', badge: 'AI' },
+  { id: 'eve_mode', label: 'পরীক্ষার আগের রাত', shortLabel: 'এক্সাম নাইট', icon: Moon, accent: 'from-amber-400 to-orange-500', badge: 'HOT' },
+  { id: 'weakpoints', label: 'দুর্বল পয়েন্ট', shortLabel: 'দুর্বল পয়েন্ট', icon: AlertTriangle, accent: 'from-rose-500 to-amber-600' },
+  { id: 'analytics', label: 'এনালাইটিক্স', shortLabel: 'এনালাইটিক্স', icon: BarChart3, accent: 'from-emerald-500 to-cyan-600' },
+  { id: 'profile', label: 'প্রোফাইল', shortLabel: 'প্রোফাইল', icon: User, accent: 'from-indigo-500 to-indigo-600' },
   { id: 'admin', label: 'এডমিন', shortLabel: 'এডমিন', icon: Shield, accent: 'from-purple-600 to-rose-600' },
 ];
 
@@ -72,44 +77,44 @@ export const FloatingBottomNav: React.FC<FloatingBottomNavProps> = ({
 
   const scrollLeft = () => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollBy({ left: -140, behavior: 'smooth' });
+      scrollContainerRef.current.scrollBy({ left: -160, behavior: 'smooth' });
     }
   };
 
   const scrollRight = () => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollBy({ left: 140, behavior: 'smooth' });
+      scrollContainerRef.current.scrollBy({ left: 160, behavior: 'smooth' });
     }
   };
 
   return (
     <aside 
-      aria-label="নিচের স্বয়ংক্রিয় স্ক্রলেবল নেভিগেশন বার" 
-      className="fixed bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 z-50 w-[96%] max-w-4xl pointer-events-none"
+      aria-label="সাইবারপাঙ্ক গ্লাস নেভিগেশন বার" 
+      className="fixed bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 z-50 w-[96%] max-w-5xl pointer-events-none"
     >
       <div className="relative pointer-events-auto group">
-        {/* Left Scroll Trigger Button (Desktop/Tablet) */}
+        {/* Left Scroll Button */}
         <button
           onClick={scrollLeft}
           title="বামে স্ক্রল করুন"
-          className="hidden sm:flex absolute -left-3 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-slate-900/90 border border-white/20 text-slate-300 hover:text-white items-center justify-center shadow-lg hover:bg-slate-800 transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+          className="hidden sm:flex absolute -left-3 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-slate-900/90 border border-cyan-500/30 text-cyan-300 hover:text-white items-center justify-center shadow-lg hover:bg-slate-800 transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
 
-        {/* Right Scroll Trigger Button (Desktop/Tablet) */}
+        {/* Right Scroll Button */}
         <button
           onClick={scrollRight}
           title="ডানে স্ক্রল করুন"
-          className="hidden sm:flex absolute -right-3 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-slate-900/90 border border-white/20 text-slate-300 hover:text-white items-center justify-center shadow-lg hover:bg-slate-800 transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+          className="hidden sm:flex absolute -right-3 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-slate-900/90 border border-cyan-500/30 text-cyan-300 hover:text-white items-center justify-center shadow-lg hover:bg-slate-800 transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
         >
           <ChevronRight className="w-4 h-4" />
         </button>
 
-        {/* Outer Nav Container with Frosted Glass and Soft Edge Gradient */}
-        <div className="relative bg-slate-950/92 backdrop-blur-2xl border border-white/15 shadow-[0_12px_40px_rgba(0,0,0,0.7)] rounded-2xl sm:rounded-full p-1 sm:p-1.5 overflow-hidden">
+        {/* Outer Glass Container */}
+        <div className="relative bg-slate-950/95 backdrop-blur-2xl border border-cyan-500/30 shadow-[0_12px_45px_rgba(6,182,212,0.25)] rounded-2xl sm:rounded-full p-1 sm:p-1.5 overflow-hidden">
           
-          {/* Scrollable Navigation Track */}
+          {/* Scrollable Track */}
           <nav
             ref={scrollContainerRef}
             id="master-floating-bottom-nav"
@@ -127,7 +132,7 @@ export const FloatingBottomNav: React.FC<FloatingBottomNavProps> = ({
                   onClick={() => onChangeTab(item.id)}
                   className={`relative shrink-0 py-1.5 sm:py-2 px-2.5 sm:px-3.5 rounded-xl sm:rounded-full flex items-center gap-1.5 sm:gap-2 transition-all duration-200 outline-none select-none z-10 cursor-pointer ${
                     isActive 
-                      ? 'text-white font-bold shadow-sm' 
+                      ? 'text-white font-black shadow-sm' 
                       : 'text-slate-400 hover:text-slate-200 font-medium hover:bg-white/5'
                   }`}
                 >
@@ -135,7 +140,7 @@ export const FloatingBottomNav: React.FC<FloatingBottomNavProps> = ({
                   {isActive && (
                     <motion.div
                       layoutId="masterBottomNavActivePill"
-                      className="absolute inset-0 bg-gradient-to-r from-indigo-600 via-indigo-600 to-indigo-700 rounded-xl sm:rounded-full shadow-lg shadow-indigo-600/40 -z-10 border border-indigo-400/30"
+                      className="absolute inset-0 bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 rounded-xl sm:rounded-full shadow-lg shadow-cyan-500/30 -z-10 border border-cyan-400/40"
                       transition={{ type: 'spring', stiffness: 450, damping: 32 }}
                     />
                   )}
@@ -147,31 +152,34 @@ export const FloatingBottomNav: React.FC<FloatingBottomNavProps> = ({
                         isActive ? 'scale-110 text-white' : 'text-slate-400'
                       }`} 
                     />
-                    {item.id === 'gamification' && (
+                    {item.id === 'backlog' && !isActive && (
                       <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
                       </span>
                     )}
-                    {item.id === 'weakpoints' && !isActive && (
-                      <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-slate-900" />
+                    {item.id === 'leaderboard' && (
+                      <span className="absolute -top-1 -right-1 flex h-1.5 w-1.5">
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400" />
+                      </span>
                     )}
                   </div>
 
                   {/* Label */}
-                  <span className="text-[11px] sm:text-xs tracking-tight whitespace-nowrap font-anek">
+                  <span className="text-[11px] sm:text-xs tracking-tight whitespace-nowrap font-anek font-bold">
                     {item.label}
                   </span>
 
                   {/* Badges / Pill Tags */}
-                  {item.id === 'gamification' && streakCount > 0 && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-500/25 text-amber-300 border border-amber-500/40 hidden sm:inline-block">
-                      🔥 {streakCount}d
-                    </span>
-                  )}
-                  {item.isNew && item.id !== 'gamification' && (
-                    <span className="text-[8px] font-extrabold px-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase tracking-tighter hidden md:inline-block">
-                      NEW
+                  {item.badge && (
+                    <span
+                      className={`text-[8px] font-extrabold px-1 rounded uppercase tracking-tighter hidden md:inline-block ${
+                        item.badge === 'HOT'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                      }`}
+                    >
+                      {item.badge}
                     </span>
                   )}
                 </button>

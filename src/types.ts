@@ -25,7 +25,23 @@ export type StreamKey = 'science' | 'business' | 'humanities';
 export type ReligionKey = 'islam' | 'hindu' | 'buddhist' | 'christian';
 export type ReligionBn = 'ইসলাম' | 'হিন্দু' | 'বৌদ্ধ' | 'খ্রিস্টান';
 
-export type NavTabKey = 'profile' | 'syllabus' | 'routine' | 'practice' | 'weakpoints' | 'gamification' | 'analytics' | 'progress' | 'suggestions' | 'countdown' | 'eve_mode' | 'admin';
+export type NavTabKey = 
+  | 'dashboard'
+  | 'routine'
+  | 'backlog'
+  | 'megabank'
+  | 'leaderboard'
+  | 'syllabus'
+  | 'practice'
+  | 'weakpoints'
+  | 'gamification'
+  | 'analytics'
+  | 'progress'
+  | 'suggestions'
+  | 'countdown'
+  | 'eve_mode'
+  | 'profile'
+  | 'admin';
 
 export type ChapterStatus = 'not_started' | 'in_progress' | 'completed' | 'revised';
 
@@ -59,14 +75,20 @@ export interface LeaderboardStudent {
   name: string;
   school: string;
   xp: number;
+  points?: number;
   streak: number;
+  streakDays?: number;
   avatar: string;
-  batch: string;
-  group: string;
+  batch?: string;
+  group?: string;
+  district?: string;
   isCurrentUser?: boolean;
-  level: number;
-  badgeTitle: string;
-  completedChapters: number;
+  level?: number;
+  badge?: string;
+  badgeTitle?: string;
+  completedChapters?: number;
+  completionRate?: number;
+  weeklyHours?: number;
 }
 
 export interface ChapterProgressData {
@@ -196,4 +218,90 @@ export interface AuthSession {
   isLoggedIn: boolean;
   user: FirebaseUserData;
 }
+
+export interface BacklogItem {
+  id: string;
+  subjectId: string;
+  subjectName: string;
+  chapterId: string;
+  chapterName: string;
+  missedDate: string;
+  priority: 'CRITICAL' | 'HIGH' | 'MEDIUM';
+  estimatedMinutes: number;
+  reason?: string;
+  isRecovered: boolean;
+  recoveredAt?: string;
+  rescheduledDate?: string;
+  rescheduledSlot?: string;
+}
+
+export interface MegaBankQuestion {
+  id: string;
+  subjectId: string;
+  subjectName: string;
+  chapterName: string;
+  boardName: string; // 'ঢাকা', 'রাজশাহী', 'চট্টগ্রাম', 'কুমিল্লা', 'দিনাজপুর', 'যশোর', 'সিলেট', 'বরিশাল', 'ময়মনসিংহ', 'মাদ্রাসা'
+  year: number; // 2015 - 2026
+  type: 'CQ' | 'MCQ';
+  difficulty: 'Easy' | 'Medium' | 'Hard' | 'Pro-Cadet';
+  questionStem: string;
+  cqSubQuestions?: {
+    k: string; // জ্ঞানমূলক (১)
+    kh: string; // অনুধাবনমূলক (২)
+    g: string; // প্রয়োগমূলক (৩)
+    gh: string; // উচ্চতর দক্ষতামূলক (৪)
+  };
+  mcqOptions?: string[];
+  mcqCorrectIndex?: number;
+  explanation: string;
+  formulaRef?: string;
+  tags: string[];
+}
+
+export interface CadetCollegePaper {
+  id: string;
+  collegeName: string; // 'ফৌজদারহাট', 'মির্জাপুর', 'রাজশাহী', 'ঝিনাইদহ', 'সিলেট', 'রংপুর', 'বরিশাল', 'পাবনা', 'ময়মনসিংহ', 'কুমিল্লা', 'ফেনী'
+  subjectName: string;
+  examType: 'Pre-Test' | 'Test Special' | 'Model Test';
+  year: number;
+  totalMarks: number;
+  durationMinutes: number;
+  questionsCount: number;
+  highlightedTopics: string[];
+  sampleCqStem: string;
+  expertTips: string;
+}
+
+export interface FormulaItem {
+  id: string;
+  subjectId: string;
+  subjectName: string;
+  chapterName: string;
+  formulaName: string;
+  formulaLatex: string;
+  unitsAndSymbols: { symbol: string; meaning: string; unit: string }[];
+  applicationTip: string;
+  boardHotRating: number; // 1 to 5 stars
+  commonMistakes: string;
+}
+
+export interface AchievementBadge {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  rarity: 'Common' | 'Rare' | 'Epic' | 'Legendary';
+  unlockedAt?: string;
+}
+
+export interface ReminderSetting {
+  id: string;
+  title: string;
+  time: string; // "HH:mm"
+  days: string[]; // ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+  isEnabled: boolean;
+  type: 'routine' | 'flashcard' | 'exam_countdown' | 'backlog_warning';
+  message: string;
+}
+
 
