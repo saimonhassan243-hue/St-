@@ -13,6 +13,7 @@ import {
   StreamKey, 
   ReligionBn, 
   ChapterProgressData, 
+  ChapterStatus,
   ChapterWeakPointData,
   ExamConfigData,
   FirebaseUserData 
@@ -51,6 +52,7 @@ interface RoutineViewProps {
   onUpdateProgressData?: (chapterId: string, updated: Partial<ChapterProgressData>) => void;
   onNavigateToSyllabus?: (subjectId: string, chapterId: string) => void;
   onUpdateExamConfig?: (config: ExamConfigData) => void;
+  onOpenBacklogRecoveryModal?: () => void;
 }
 
 const STORAGE_KEY_CHECKED_SLOTS = 'ssc_smart_routine_checked_slots_v2';
@@ -71,6 +73,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   onUpdateProgressData,
   onNavigateToSyllabus,
   onUpdateExamConfig,
+  onOpenBacklogRecoveryModal,
 }) => {
   // 1. Exam Configuration State
   const [examConfig, setExamConfig] = useState<ExamConfigData>(() => {
@@ -167,10 +170,11 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     return true;
   });
 
-  // Toggle slot completion
-  const handleToggleSlot = (slotId: string) => {
+  // Toggle slot completion with syllabus progress auto-sync
+  const handleToggleSlot = (slotId: string, slot?: DailyScheduleSlot) => {
+    const isNowChecked = !checkedSlots[slotId];
     setCheckedSlots((prev) => {
-      const next = { ...prev, [slotId]: !prev[slotId] };
+      const next = { ...prev, [slotId]: isNowChecked };
       try {
         localStorage.setItem(STORAGE_KEY_CHECKED_SLOTS, JSON.stringify(next));
       } catch {
@@ -178,6 +182,43 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       }
       return next;
     });
+
+    // Auto-sync with Syllabus chapter tasks
+    if (slot && slot.chapterId && onUpdateProgressData) {
+      const prevProgress = chapterProgress[slot.chapterId];
+      const curReading = prevProgress?.bookReading ?? false;
+      const curCq = prevProgress?.cqPractice ?? false;
+      const curMcq = prevProgress?.mcqPractice ?? false;
+
+      let newReading = curReading;
+      let newCq = curCq;
+      let newMcq = curMcq;
+
+      if (slot.assignedTaskType === 'concept_clear') {
+        newReading = isNowChecked;
+      } else if (slot.assignedTaskType === 'cq_solve') {
+        newCq = isNowChecked;
+      } else if (slot.assignedTaskType === 'mcq_solve') {
+        newMcq = isNowChecked;
+      } else {
+        if (isNowChecked) {
+          newReading = true;
+          newCq = true;
+          newMcq = true;
+        }
+      }
+
+      const doneCount = (newReading ? 1 : 0) + (newCq ? 1 : 0) + (newMcq ? 1 : 0);
+      const newStatus: ChapterStatus = doneCount === 3 ? 'completed' : doneCount > 0 ? 'in_progress' : 'not_started';
+
+      onUpdateProgressData(slot.chapterId, {
+        bookReading: newReading,
+        cqPractice: newCq,
+        mcqPractice: newMcq,
+        status: newStatus,
+        completedAt: newStatus === 'completed' ? new Date().toISOString() : undefined,
+      });
+    }
   };
 
   // Save Exam Target Configuration
@@ -518,6 +559,37 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
           </div>
         </div>
 
+        {/* Strict AI Routine Tracking & Pending Recovery Banner */}
+        {totalStudyCount > 0 && completedStudyCount < totalStudyCount && selectedDayIndex === 0 && (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-rose-950/50 via-slate-900/90 to-amber-950/40 border border-rose-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 shrink-0">
+                <AlertTriangle className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-2 font-jakarta">
+                  <span>AI রুটিন ট্র্যাকিং: {toBengaliNumber(totalStudyCount - completedStudyCount)}টি স্টাডি সেশন পেন্ডিং রয়েছে</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-normal font-anek">
+                    রিকভারি সুপারিশকৃত
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 font-anek mt-0.5">
+                  সিলেবাসের ধারাবাহিকতা বজায় রাখতে আজকের পেন্ডিং টাস্কগুলো সম্পন্ন করুন অথবা AI ব্যাকলগ রিকভারি দিয়ে রিশিডিউল করুন।
+                </p>
+              </div>
+            </div>
+            {onOpenBacklogRecoveryModal && (
+              <button
+                onClick={onOpenBacklogRecoveryModal}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-bold text-xs shadow-md flex items-center gap-1.5 transition-all cursor-pointer shrink-0 font-anek"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>AI রিকভারি শুরু করুন</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Timeline Slots Container */}
         <div className="space-y-3 pt-2">
           {visibleSlots.map((slot, idx) => {
@@ -585,7 +657,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   <div className="flex items-start gap-3.5 flex-1 min-w-0">
                     {/* Checkbox */}
                     <button
-                      onClick={() => handleToggleSlot(slot.id)}
+                      onClick={() => handleToggleSlot(slot.id, slot)}
                       className="mt-0.5 p-1 text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer shrink-0"
                       title={isDone ? 'সম্পন্ন হিসেবে চিহ্নিত' : 'সম্পন্ন করুন'}
                     >

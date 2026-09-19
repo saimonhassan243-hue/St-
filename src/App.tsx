@@ -1066,6 +1066,7 @@ export default function StudentDashboard() {
                   currentUser={currentUser}
                   onUpdateProgressData={handleUpdateProgressData}
                   onNavigateToSyllabus={() => setActiveTab('syllabus')}
+                  onOpenBacklogRecoveryModal={() => setShowBacklogRecoveryModal(true)}
                   onUpdateExamConfig={(config) => {
                     setUserState((prev) => ({
                       ...prev,

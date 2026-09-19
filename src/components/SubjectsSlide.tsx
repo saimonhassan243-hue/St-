@@ -11,6 +11,7 @@ import { SubjectCard } from './SubjectCard';
 import { SyllabusCustomizer } from './SyllabusCustomizer';
 import { AlgorithmicProgressCalculator } from './AlgorithmicProgressCalculator';
 import { toBengaliNumber } from '../utils/progressCalculator';
+import { getTodaysRoutineChapterIds } from '../utils/aiDynamicExamRoutineEngine';
 
 interface SubjectsSlideProps {
   compulsorySubjects: Subject[];
@@ -106,6 +107,17 @@ export const SubjectsSlide: React.FC<SubjectsSlideProps> = ({
   const allActiveUnfilteredSubjects = useMemo(() => {
     return [...compulsorySubjects, ...streamSubjects, fourthSubject, religionSubject];
   }, [compulsorySubjects, streamSubjects, fourthSubject, religionSubject]);
+
+  // Compute today's active routine chapter IDs for automatic syllabus indicator badges
+  const todayRoutineChapterIds = useMemo(() => {
+    return getTodaysRoutineChapterIds(
+      allActiveUnfilteredSubjects,
+      customSelectedChapterIds,
+      chapterProgress,
+      {},
+      0
+    );
+  }, [allActiveUnfilteredSubjects, customSelectedChapterIds, chapterProgress]);
 
   const allSubjectTabsList = useMemo(() => {
     const list: {
@@ -398,6 +410,7 @@ export const SubjectsSlide: React.FC<SubjectsSlideProps> = ({
                             categoryBadgeColor={selectedItem.badgeColor}
                             chapterProgress={chapterProgress}
                             suggestionProgress={suggestionProgress}
+                            todayRoutineChapterIds={todayRoutineChapterIds}
                             onUpdateStatus={onUpdateStatus}
                             onUpdateNote={onUpdateNote}
                             onToggleSuggestion={onToggleSuggestion}
@@ -433,6 +446,7 @@ export const SubjectsSlide: React.FC<SubjectsSlideProps> = ({
                               categoryBadgeColor="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
                               chapterProgress={chapterProgress}
                               suggestionProgress={suggestionProgress}
+                              todayRoutineChapterIds={todayRoutineChapterIds}
                               onUpdateStatus={onUpdateStatus}
                               onUpdateNote={onUpdateNote}
                               onToggleSuggestion={onToggleSuggestion}
@@ -467,6 +481,7 @@ export const SubjectsSlide: React.FC<SubjectsSlideProps> = ({
                               categoryBadgeColor="bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
                               chapterProgress={chapterProgress}
                               suggestionProgress={suggestionProgress}
+                              todayRoutineChapterIds={todayRoutineChapterIds}
                               onUpdateStatus={onUpdateStatus}
                               onUpdateNote={onUpdateNote}
                               onToggleSuggestion={onToggleSuggestion}
@@ -500,6 +515,7 @@ export const SubjectsSlide: React.FC<SubjectsSlideProps> = ({
                             categoryBadgeColor="bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/30"
                             chapterProgress={chapterProgress}
                             suggestionProgress={suggestionProgress}
+                            todayRoutineChapterIds={todayRoutineChapterIds}
                             onUpdateStatus={onUpdateStatus}
                             onUpdateNote={onUpdateNote}
                             onToggleSuggestion={onToggleSuggestion}
@@ -532,6 +548,7 @@ export const SubjectsSlide: React.FC<SubjectsSlideProps> = ({
                             categoryBadgeColor="bg-amber-500/15 text-amber-300 border border-amber-500/30"
                             chapterProgress={chapterProgress}
                             suggestionProgress={suggestionProgress}
+                            todayRoutineChapterIds={todayRoutineChapterIds}
                             onUpdateStatus={onUpdateStatus}
                             onUpdateNote={onUpdateNote}
                             onToggleSuggestion={onToggleSuggestion}

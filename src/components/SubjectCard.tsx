@@ -26,6 +26,7 @@ interface SubjectCardProps {
   categoryBadgeColor: string;
   chapterProgress: Record<string, ChapterProgressData>;
   suggestionProgress: Record<string, boolean>;
+  todayRoutineChapterIds?: Set<string>;
   onUpdateStatus: (chapterId: string, status: ChapterStatus) => void;
   onUpdateNote: (chapterId: string, note: string) => void;
   onToggleSuggestion: (subjectId: string, index: number) => void;
@@ -46,6 +47,7 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
   categoryBadgeColor,
   chapterProgress,
   suggestionProgress,
+  todayRoutineChapterIds,
   onUpdateStatus,
   onUpdateNote,
   onToggleSuggestion,
@@ -251,6 +253,7 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
                     chapter={chapter}
                     index={chapterIndex}
                     progress={prog}
+                    isTodayRoutineItem={todayRoutineChapterIds ? todayRoutineChapterIds.has(chapter.id) : false}
                     onUpdateStatus={onUpdateStatus}
                     onUpdateNote={onUpdateNote}
                     onUpdateProgressData={onUpdateProgressData}

@@ -32,6 +32,7 @@ export interface UltraModernChapterCardProps {
   chapter: Chapter;
   index: number;
   progress?: ChapterProgressData;
+  isTodayRoutineItem?: boolean;
   onUpdateStatus: (chapterId: string, status: ChapterStatus) => void;
   onUpdateNote?: (chapterId: string, note: string) => void;
   onUpdateProgressData?: (chapterId: string, updated: Partial<ChapterProgressData>) => void;
@@ -79,6 +80,7 @@ export const UltraModernChapterCard: React.FC<UltraModernChapterCardProps> = ({
   chapter,
   index,
   progress,
+  isTodayRoutineItem = false,
   onUpdateStatus,
   onUpdateNote,
   onUpdateProgressData,
@@ -232,6 +234,13 @@ export const UltraModernChapterCard: React.FC<UltraModernChapterCardProps> = ({
             <h3 className="text-base sm:text-lg font-bold text-white tracking-tight leading-snug font-hind mt-0.5">
               {title}
             </h3>
+
+            {isTodayRoutineItem && (
+              <div className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-[11px] font-medium font-anek shadow-sm">
+                <Sparkles className="w-3 h-3 text-cyan-400 shrink-0" />
+                <span>এটি আজকের আপনার রুটিনের অন্তর্ভুক্ত</span>
+              </div>
+            )}
           </div>
         </div>
 

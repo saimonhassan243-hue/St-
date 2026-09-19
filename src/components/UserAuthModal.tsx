@@ -29,9 +29,9 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
   isMandatory = false,
 }) => {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [name, setName] = useState(currentUser?.name || 'মো: সাইমন হাসান');
-  const [email, setEmail] = useState(currentUser?.email || 'saimon.hassan243@gmail.com');
-  const [password, setPassword] = useState('••••••••');
+  const [name, setName] = useState(currentUser?.name || '');
+  const [email, setEmail] = useState(currentUser?.email || '');
+  const [password, setPassword] = useState('');
   const [group, setGroup] = useState(currentUser?.group || 'বিজ্ঞান (Science)');
   const [batch, setBatch] = useState(currentUser?.batch || 'SSC 2028');
   const [emailVerified, setEmailVerified] = useState(true);
@@ -58,10 +58,13 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
       }
 
       const secInfo = await getDeviceSecurityInfo();
-      const googleUserEmail = email.includes('@') ? email : 'saimon.hassan243@gmail.com';
+      const googleUserEmail = (email && email.includes('@')) 
+        ? email.trim().toLowerCase() 
+        : (currentUser?.email || `student_${Math.floor(1000 + Math.random() * 9000)}@gmail.com`);
+      const studentName = (name && name.trim()) ? name.trim() : (currentUser?.name || 'শিক্ষার্থী');
       const userData: FirebaseUserData = {
         userId: sanitizeUserId(googleUserEmail),
-        name: name || 'মো: সাইমন হাসান',
+        name: studentName,
         email: googleUserEmail,
         provider: 'Google',
         batch,
@@ -326,7 +329,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="যেমন: মো: সাইমন হাসান"
+                  placeholder="আপনার পুরো নাম লিখুন"
                   className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-[#5B50F6] focus:outline-none"
                 />
               </div>
@@ -341,7 +344,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="saimon.hassan243@gmail.com"
+                placeholder="আপনার ইমেইল দিন"
                 className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-[#5B50F6] focus:outline-none font-mono"
               />
             </div>
@@ -355,7 +358,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="পাসওয়ার্ড লিখুন (কমপক্ষে ৬ অক্ষর)"
+                placeholder="পাসওয়ার্ড দিন"
                 className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-[#5B50F6] focus:outline-none"
               />
             </div>

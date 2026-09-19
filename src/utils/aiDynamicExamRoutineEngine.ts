@@ -725,3 +725,30 @@ export function formatMinutesBn(minutes: number): string {
   const formatted = hours % 1 === 0 ? hours.toFixed(0) : hours.toFixed(1);
   return `${toBengaliNumber(formatted)} ঘণ্টা`;
 }
+
+/**
+ * 8. Helper to get all Chapter IDs that are part of Today's routine (Day 0)
+ */
+export function getTodaysRoutineChapterIds(
+  allSubjects: Subject[],
+  customSelectedChapterIds?: string[],
+  chapterProgress: Record<string, ChapterProgressData> = {},
+  weakPointsMap: Record<string, ChapterWeakPointData> = {},
+  dayOffset: number = 0
+): Set<string> {
+  const schedule = generateSmartDailySchedule(
+    allSubjects,
+    customSelectedChapterIds,
+    chapterProgress,
+    weakPointsMap,
+    {},
+    dayOffset
+  );
+  const set = new Set<string>();
+  schedule.forEach((slot) => {
+    if (slot.type === 'study' && slot.chapterId) {
+      set.add(slot.chapterId);
+    }
+  });
+  return set;
+}
